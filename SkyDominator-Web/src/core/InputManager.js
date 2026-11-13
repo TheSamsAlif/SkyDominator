@@ -1,0 +1,189 @@
+/**
+ * Cross-Platform Unified Input Manager (Keyboard, Mouse, Gamepad, Touch)
+ */
+export class InputManager {
+  constructor() {
+    this.pitch = 0;
+    this.roll = 0;
+    this.yaw = 0;
+    this.throttleUp = false;
+    this.throttleDown = false;
+    this.boost = false;
+    this.airbrake = false;
+    this.fireCannon = false;
+    this.fireMissile = false;
+    this.deployFlare = false;
+    this.cycleCamera = false;
+
+    this.keys = {};
+    this.mouse = { x: 0, y: 0, down: false };
+    this.touchStick = { active: false, startX: 0, startY: 0, deltaX: 0, deltaY: 0 };
+
+    this.isTouchDevice = false;
+
+    this.setupListeners();
+  }
+
+  setupListeners() {
+    // 1. Keyboard
+    window.addEventListener('keydown', (e) => {
+      this.keys[e.code] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      this.keys[e.code] = false;
+    });
+
+    // 2. Mouse flight control
+    window.addEventListener('mousemove', (e) => {
+      const halfW = window.innerWidth / 2;
+      const halfH = window.innerHeight / 2;
+      this.mouse.x = (e.clientX - halfW) / halfW;
+      this.mouse.y = (e.clientY - halfH) / halfH;
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0) this.mouse.down = true;
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.mouse.down = false;
+    });
+
+    // 3. Touch Screen Detection & Virtual Joystick
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      this.isTouchDevice = true;
+      const touchControlsElem = document.getElementById('mobile-touch-controls');
+      if (touchControlsElem) {
+        touchControlsElem.style.display = 'block';
+      }
+      this.setupTouchControls();
+    }
+  }
+
+  setupTouchControls() {
+    const stickZone = document.getElementById('virtual-flight-stick');
+    const thumb = document.getElementById('touch-stick-thumb');
+
+    if (stickZone && thumb) {
+      const handleTouch = (touch) => {
+        const rect = stickZone.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let dx = (touch.clientX - centerX) / 50;
+        let dy = (touch.clientY - centerY) / 50;
+
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 1.0) {
+          dx /= dist;
+          dy /= dist;
+        }
+
+        this.touchStick.deltaX = dx;
+        this.touchStick.deltaY = dy;
+
+        thumb.style.transform = `translate(${dx * 35}px, ${dy * 35}px)`;
+      };
+
+      stickZone.addEventListener('touchstart', (e) => {
+        this.touchStick.active = true;
+        handleTouch(e.touches[0]);
+      }, { passive: false });
+
+      stickZone.addEventListener('touchmove', (e) => {
+        if (this.touchStick.active) {
+          handleTouch(e.touches[0]);
+        }
+      }, { passive: false });
+
+      const resetThumb = () => {
+        this.touchStick.active = false;
+        this.touchStick.deltaX = 0;
+        this.touchStick.deltaY = 0;
+        thumb.style.transform = `translate(0px, 0px)`;
+      };
+
+      stickZone.addEventListener('touchend', resetThumb);
+      stickZone.addEventListener('touchcancel', resetThumb);
+    }
+
+    // Touch Buttons
+    const bindTouchBtn = (id, onStart, onEnd) => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); onStart(); }, { passive: false });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); onEnd(); }, { passive: false });
+      }
+    };
+
+    bindTouchBtn('touch-btn-boost', () => { this.boost = true; }, () => { this.boost = false; });
+    bindTouchBtn('touch-btn-brake', () => { this.airbrake = true; }, () => { this.airbrake = false; });
+    bindTouchBtn('touch-btn-fire-cannon', () => { this.fireCannon = true; }, () => { this.fireCannon = false; });
+    bindTouchBtn('touch-btn-fire-missile', () => { this.fireMissile = true; }, () => { this.fireMissile = false; });
+    bindTouchBtn('touch-btn-flare', () => { this.deployFlare = true; }, () => { this.deployFlare = false; });
+    bindTouchBtn('touch-btn-cam', () => { this.cycleCamera = true; }, () => { this.cycleCamera = false; });
+  }
+
+  update() {
+    // Check Gamepad
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const gp = gamepads[0];
+
+    if (gp) {
+      // Left stick: Pitch & Roll
+      this.pitch = -gp.axes[1];
+      this.roll = -gp.axes[0];
+      // Triggers: Throttle & Brake
+      this.throttleUp = gp.buttons[7] && gp.buttons[7].pressed;
+      this.airbrake = gp.buttons[6] && gp.buttons[6].pressed;
+      // Bumpers: Yaw
+      this.yaw = (gp.buttons[5]?.pressed ? 1 : 0) - (gp.buttons[4]?.pressed ? 1 : 0);
+      // Face buttons
+      this.fireCannon = gp.buttons[0] && gp.buttons[0].pressed;
+      this.fireMissile = gp.buttons[1] && gp.buttons[1].pressed;
+      this.boost = gp.buttons[10] && gp.buttons[10].pressed; // L3
+      return;
+    }
+
+    // Touch stick override
+    if (this.touchStick.active) {
+      this.pitch = -this.touchStick.deltaY;
+      this.roll = -this.touchStick.deltaX;
+      return;
+    }
+
+    // Keyboard & Mouse inputs
+    let kPitch = 0;
+    if (this.keys['KeyW'] || this.keys['ArrowUp']) kPitch += 1.0;
+    if (this.keys['KeyS'] || this.keys['ArrowDown']) kPitch -= 1.0;
+
+    let kRoll = 0;
+    if (this.keys['KeyA'] || this.keys['ArrowLeft']) kRoll += 1.0;
+    if (this.keys['KeyD'] || this.keys['ArrowRight']) kRoll -= 1.0;
+
+    // Mouse blend
+    const deadzone = 0.08;
+    let mPitch = Math.abs(this.mouse.y) > deadzone ? -this.mouse.y * 1.2 : 0;
+    let mRoll = Math.abs(this.mouse.x) > deadzone ? -this.mouse.x * 1.5 : 0;
+
+    this.pitch = kPitch !== 0 ? kPitch : mPitch;
+    this.roll = kRoll !== 0 ? kRoll : mRoll;
+
+    let kYaw = 0;
+    if (this.keys['KeyQ']) kYaw += 1.0;
+    if (this.keys['KeyE']) kYaw -= 1.0;
+    this.yaw = kYaw;
+
+    this.throttleUp = this.keys['ShiftLeft'] || this.keys['KeyZ'];
+    this.throttleDown = this.keys['ControlLeft'] || this.keys['KeyX'];
+    this.boost = this.keys['ShiftLeft'] || this.keys['Space'];
+    this.airbrake = this.keys['KeyB'];
+
+    this.fireCannon = this.keys['Space'] || this.mouse.down;
+    this.fireMissile = this.keys['KeyR'];
+    this.deployFlare = this.keys['KeyC'];
+    this.cycleCamera = this.keys['KeyV'];
+  }
+}
+

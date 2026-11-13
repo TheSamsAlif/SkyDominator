@@ -1,0 +1,29 @@
+# Dependencies & Web Builds
+node_modules/
+dist/
+SkyDominator-Web/node_modules/
+SkyDominator-Web/dist/
+.DS_Store
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Unreal Engine 5 Build & Cache Artefacts
+Intermediate/
+Saved/
+Binaries/
+DerivedDataCache/
+Build/
+SkyDominator/Intermediate/
+SkyDominator/Saved/
+SkyDominator/Binaries/
+SkyDominator/DerivedDataCache/
+
+# Visual Studio & IDE files
+.vs/
+*.sln
+*.VC.db
+*.opendb
+.idea/
+.vscode/

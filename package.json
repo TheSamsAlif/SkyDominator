@@ -1,0 +1,13 @@
+{
+  "name": "sky-dominator",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "SkyDominator-Web"
+  ],
+  "scripts": {
+    "dev": "npm --prefix SkyDominator-Web run dev",
+    "build": "npm --prefix SkyDominator-Web run build",
+    "preview": "npm --prefix SkyDominator-Web run preview"
+  }
+}

@@ -1,0 +1,1204 @@
+:root {
+  --bg-dark: #05080d;
+  --panel-bg: rgba(7, 13, 22, 0.85);
+  --panel-border: rgba(0, 229, 255, 0.3);
+  --cyan-bright: #00e5ff;
+  --cyan-glow: rgba(0, 229, 255, 0.4);
+  --orange-accent: #ff8c00;
+  --red-warning: #ff1744;
+  --green-ok: #00e676;
+  --text-white: #f0f6fc;
+  --text-dim: #7d8b99;
+  --font-hud: 'Orbitron', -apple-system, sans-serif;
+  --font-data: 'Rajdhani', -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  color: var(--text-white);
+  font-family: var(--font-data);
+}
+
+#game-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  display: block;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* OVERLAY MODAL */
+.overlay-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(5, 12, 22, 0.88), rgba(2, 4, 8, 0.98));
+  backdrop-filter: blur(8px);
+}
+
+.audio-prompt-modal {
+  text-align: center;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  padding: 40px 50px;
+  border-radius: 4px;
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.2);
+  max-width: 520px;
+  width: 90%;
+}
+
+.hud-glitch-title {
+  font-family: var(--font-hud);
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--text-white);
+  text-shadow: 0 0 15px var(--cyan-glow);
+}
+
+.hud-subtitle {
+  font-family: var(--font-hud);
+  font-size: 0.85rem;
+  letter-spacing: 3px;
+  color: var(--cyan-bright);
+  margin-top: 6px;
+  margin-bottom: 24px;
+}
+
+.prompt-text {
+  font-size: 1rem;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+.hardware-spec {
+  margin-top: 24px;
+  font-size: 0.75rem;
+  color: #4a5d6e;
+  letter-spacing: 2px;
+}
+
+.tactical-btn {
+  font-family: var(--font-hud);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 14px 36px;
+  border: 1px solid var(--cyan-bright);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--cyan-bright);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.tactical-btn:hover {
+  background: var(--cyan-bright);
+  color: #03080e;
+  box-shadow: 0 0 25px var(--cyan-bright);
+}
+
+.primary-glow {
+  box-shadow: 0 0 15px var(--cyan-glow);
+}
+
+/* HANGAR INTERFACE */
+.hangar-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.hangar-screen * {
+  pointer-events: auto;
+}
+
+.hangar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  background: linear-gradient(180deg, rgba(3, 7, 14, 0.9) 0%, rgba(3, 7, 14, 0) 100%);
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  font-size: 1.8rem;
+  color: var(--cyan-bright);
+  filter: drop-shadow(0 0 8px var(--cyan-bright));
+}
+
+.game-logo {
+  font-family: var(--font-hud);
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fff;
+}
+
+.game-sub {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--cyan-bright);
+}
+
+.pilot-profile {
+  display: flex;
+  gap: 20px;
+}
+
+.profile-stat {
+  background: rgba(7, 15, 25, 0.7);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  padding: 8px 16px;
+  border-radius: 2px;
+}
+
+.stat-lbl {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stat-val {
+  font-family: var(--font-hud);
+  font-weight: 700;
+  color: #fff;
+  margin-left: 6px;
+}
+
+.highlight {
+  color: var(--orange-accent);
+}
+
+.highlight-cyan {
+  color: var(--cyan-bright);
+}
+
+/* HANGAR LEFT PANEL */
+.hangar-panel {
+  position: absolute;
+  top: 90px;
+  left: 30px;
+  width: 380px;
+}
+
+.panel-box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 24px;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+}
+
+.panel-tag {
+  font-size: 0.7rem;
+  color: var(--cyan-bright);
+  letter-spacing: 2px;
+}
+
+.panel-header h2 {
+  font-family: var(--font-hud);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 4px 0 8px 0;
+}
+
+.class-pill {
+  display: inline-block;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid var(--cyan-bright);
+  color: var(--cyan-bright);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 2px;
+}
+
+.aircraft-desc {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  margin: 14px 0 20px 0;
+  line-height: 1.4;
+}
+
+/* STAT BARS */
+.stats-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-bar-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stat-name {
+  color: var(--text-dim);
+}
+
+.stat-num {
+  font-family: var(--font-hud);
+  color: #fff;
+}
+
+.bar-track {
+  grid-column: span 2;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0088cc, var(--cyan-bright));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ABILITY CARD */
+.ability-card {
+  margin-top: 18px;
+  background: rgba(0, 229, 255, 0.05);
+  border-left: 3px solid var(--cyan-bright);
+  padding: 10px 14px;
+}
+
+.ability-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.ability-text {
+  font-size: 0.85rem;
+  color: #d0e0ed;
+  margin-top: 4px;
+}
+
+/* SKIN SELECTOR */
+.skin-selector {
+  margin-top: 20px;
+}
+
+.selector-lbl {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.skin-pills {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.skin-btn {
+  background: rgba(15, 25, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #a0b2c6;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.skin-btn:hover, .skin-btn.active {
+  background: var(--cyan-bright);
+  border-color: var(--cyan-bright);
+  color: #03080e;
+}
+
+/* HANGAR FOOTER & CAROUSEL */
+.hangar-footer {
+  padding: 20px 30px;
+  background: linear-gradient(0deg, rgba(3, 7, 14, 0.95) 0%, rgba(3, 7, 14, 0) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.carousel-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1100px;
+  gap: 12px;
+}
+
+.carousel-arrow {
+  background: rgba(7, 15, 25, 0.8);
+  border: 1px solid var(--panel-border);
+  color: var(--cyan-bright);
+  font-size: 1.4rem;
+  width: 44px;
+  height: 60px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.carousel-arrow:hover {
+  background: var(--cyan-bright);
+  color: #03080e;
+}
+
+.aircraft-cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  flex: 1;
+  padding: 6px 0;
+}
+
+.aircraft-cards::-webkit-scrollbar {
+  display: none;
+}
+
+.aircraft-card {
+  min-width: 160px;
+  background: rgba(10, 18, 30, 0.8);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  padding: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: center;
+}
+
+.aircraft-card:hover {
+  border-color: var(--cyan-bright);
+  transform: translateY(-2px);
+}
+
+.aircraft-card.active {
+  border-color: var(--cyan-bright);
+  background: rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 15px var(--cyan-glow);
+}
+
+.card-id {
+  font-size: 0.7rem;
+  color: var(--cyan-bright);
+  font-weight: 700;
+}
+
+.card-name {
+  font-family: var(--font-hud);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.card-class {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* LAUNCH BUTTON */
+.launch-actions {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.launch-btn {
+  font-family: var(--font-hud);
+  background: linear-gradient(135deg, #ff8c00, #ff5722);
+  border: none;
+  color: #fff;
+  padding: 14px 60px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  transition: all 0.25s;
+}
+
+.launch-btn:hover {
+  filter: brightness(1.2);
+  transform: scale(1.03);
+}
+
+.pulse-glow {
+  box-shadow: 0 0 30px rgba(255, 140, 0, 0.6);
+}
+
+.launch-sub {
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  opacity: 0.9;
+}
+
+.launch-main {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+}
+
+.hangar-inspection-tools {
+  position: absolute;
+  top: 90px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini-tool-btn {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--cyan-bright);
+  font-family: var(--font-hud);
+  font-size: 0.75rem;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mini-tool-btn:hover {
+  background: var(--cyan-bright);
+  color: #03080e;
+}
+
+/* COMBAT FLIGHT HUD */
+.combat-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  color: var(--cyan-bright);
+  font-family: var(--font-hud);
+}
+
+/* HUD Top Bar */
+.hud-top-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: linear-gradient(180deg, rgba(3, 7, 14, 0.8) 0%, rgba(3, 7, 14, 0) 100%);
+  font-size: 0.85rem;
+}
+
+.obj-tag {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.obj-text {
+  color: #fff;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.timer-text, .score-text {
+  color: var(--orange-accent);
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+/* HUD Center Flight View */
+.hud-center-flight {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pitch-ladder {
+  position: absolute;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  opacity: 0.8;
+  transition: transform 0.05s linear;
+}
+
+.ladder-bar {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  border-bottom: 2px solid var(--cyan-bright);
+  width: 90px;
+  text-align: center;
+}
+
+.ladder-horizon-line {
+  font-size: 0.8rem;
+  color: var(--cyan-bright);
+  letter-spacing: 4px;
+  width: 160px;
+  text-align: center;
+  border-top: 1px dashed var(--cyan-bright);
+  border-bottom: 1px dashed var(--cyan-bright);
+  padding: 4px 0;
+}
+
+.center-bore-sight {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(0, 229, 255, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boresight-cross {
+  width: 4px;
+  height: 4px;
+  background: var(--cyan-bright);
+  border-radius: 50%;
+}
+
+.flight-path-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--green-ok);
+  border-radius: 50%;
+}
+
+/* TARGET LOCK RETICLE */
+.target-lock-box {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.lock-diamond {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--red-warning);
+  transform: rotate(45deg);
+  animation: lock-spin 2s linear infinite;
+  box-shadow: 0 0 10px var(--red-warning);
+}
+
+@keyframes lock-spin {
+  0% { transform: rotate(45deg); }
+  50% { transform: rotate(135deg); }
+  100% { transform: rotate(225deg); }
+}
+
+.lock-details {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(10, 18, 30, 0.75);
+  padding: 4px 8px;
+  border-radius: 2px;
+}
+
+.lock-state-seeking {
+  color: var(--orange-accent);
+}
+
+.lock-state-locked {
+  color: var(--red-warning);
+  font-weight: 900;
+}
+
+/* WARNING BOX */
+.hud-warning-box {
+  position: absolute;
+  bottom: -60px;
+  background: rgba(255, 23, 68, 0.25);
+  border: 1px solid var(--red-warning);
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: warn-pulse 0.4s alternate infinite;
+}
+
+@keyframes warn-pulse {
+  from { opacity: 0.4; }
+  to { opacity: 1.0; }
+}
+
+.warning-flasher {
+  color: var(--red-warning);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.warning-sub {
+  font-size: 0.7rem;
+  color: #fff;
+  margin-top: 2px;
+}
+
+/* HUD LADDERS (LEFT & RIGHT) */
+.hud-ladder-left {
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.hud-ladder-right {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.ladder-header {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+}
+
+.digital-readout {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.readout-unit {
+  font-size: 0.8rem;
+  color: var(--cyan-bright);
+}
+
+.digital-subreadout {
+  font-size: 0.85rem;
+  color: var(--cyan-bright);
+}
+
+.throttle-container {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.throttle-track {
+  width: 14px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--cyan-bright);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.throttle-fill {
+  width: 100%;
+  background: var(--cyan-bright);
+  transition: height 0.1s linear;
+}
+
+.throttle-percent {
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+.afterburner-tag {
+  font-size: 0.7rem;
+  padding: 3px 6px;
+  border: 1px solid var(--cyan-bright);
+  color: var(--cyan-bright);
+  letter-spacing: 1px;
+}
+
+.afterburner-active {
+  background: var(--orange-accent);
+  border-color: var(--orange-accent);
+  color: #000;
+  font-weight: 900;
+  box-shadow: 0 0 15px var(--orange-accent);
+}
+
+.g-readout {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+/* HUD BOTTOM PANELS */
+.hud-bottom-left {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 240px;
+}
+
+.status-gauge-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.gauge-lbl {
+  color: var(--text-dim);
+}
+
+.gauge-val {
+  color: #fff;
+  font-weight: 700;
+}
+
+.gauge-track {
+  grid-column: span 2;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.health-color { background: #00e676; }
+.shield-color { background: var(--cyan-bright); }
+.boost-color { background: var(--orange-accent); }
+
+/* WEAPONS MATRIX */
+.hud-bottom-center {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.weapon-slot {
+  background: rgba(7, 13, 22, 0.7);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+}
+
+.weapon-slot.active {
+  border-color: var(--cyan-bright);
+  box-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.weapon-key {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+.weapon-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 2px 0;
+}
+
+.weapon-ammo {
+  font-size: 0.75rem;
+  color: var(--cyan-bright);
+}
+
+/* RADAR MINIMAP */
+.hud-bottom-right {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.radar-display {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 1px solid var(--cyan-bright);
+  background: radial-gradient(circle, rgba(0, 229, 255, 0.08) 0%, rgba(3, 8, 16, 0.8) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-sweep {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: conic-gradient(from 0deg, rgba(0, 229, 255, 0.4) 0deg, transparent 60deg);
+  border-radius: 50%;
+  animation: radar-rot 3s linear infinite;
+}
+
+@keyframes radar-rot {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.radar-rings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70px;
+  height: 70px;
+  border: 1px dashed rgba(0, 229, 255, 0.3);
+  border-radius: 50%;
+}
+
+.radar-center-blip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  background: var(--cyan-bright);
+  border-radius: 50%;
+}
+
+.radar-range-tag {
+  position: absolute;
+  bottom: 4px;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  width: 100%;
+  text-align: center;
+}
+
+.radar-blip-enemy {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--red-warning);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px var(--red-warning);
+}
+
+.camera-mode-tag {
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+/* MOBILE TOUCH CONTROLS */
+.mobile-controls {
+  display: none; /* Auto-enabled via JS on touch devices */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.touch-stick-zone {
+  position: absolute;
+  bottom: 40px;
+  left: 30px;
+  width: 130px;
+  height: 130px;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.touch-stick-base {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 229, 255, 0.4);
+  background: rgba(7, 13, 22, 0.4);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.touch-stick-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--cyan-bright);
+  box-shadow: 0 0 10px var(--cyan-bright);
+  position: absolute;
+}
+
+.touch-hint {
+  font-size: 0.65rem;
+  color: var(--cyan-bright);
+  margin-top: 6px;
+  letter-spacing: 1px;
+}
+
+.touch-throttle-zone {
+  position: absolute;
+  bottom: 50px;
+  left: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-round-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  font-family: var(--font-hud);
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.boost-btn {
+  background: rgba(255, 140, 0, 0.2);
+  border-color: var(--orange-accent);
+  color: var(--orange-accent);
+}
+
+.brake-btn {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--cyan-bright);
+  color: var(--cyan-bright);
+}
+
+.touch-actions-zone {
+  position: absolute;
+  bottom: 40px;
+  right: 30px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-action-btn {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fire-cannon-btn {
+  background: rgba(0, 229, 255, 0.25);
+  border-color: var(--cyan-bright);
+  color: #fff;
+}
+
+.fire-missile-btn {
+  background: rgba(255, 23, 68, 0.25);
+  border-color: var(--red-warning);
+  color: #fff;
+}
+
+.flare-btn, .cam-btn {
+  background: rgba(15, 25, 38, 0.7);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+/* DEBRIEF MODAL */
+.debrief-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 40;
+  background: rgba(4, 8, 14, 0.9);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.debrief-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 36px 44px;
+  border-radius: 4px;
+  max-width: 550px;
+  width: 90%;
+  box-shadow: 0 0 50px rgba(0, 229, 255, 0.25);
+  text-align: center;
+}
+
+.outcome-badge {
+  display: inline-block;
+  font-family: var(--font-hud);
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  padding: 6px 20px;
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+
+.outcome-badge.victory {
+  background: rgba(0, 230, 118, 0.2);
+  border: 1px solid var(--green-ok);
+  color: var(--green-ok);
+}
+
+.outcome-badge.defeat {
+  background: rgba(255, 23, 68, 0.2);
+  border: 1px solid var(--red-warning);
+  color: var(--red-warning);
+}
+
+.debrief-title {
+  font-family: var(--font-hud);
+  font-size: 1.6rem;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+}
+
+.debrief-stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.debrief-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(10, 18, 28, 0.6);
+  border-left: 2px solid var(--cyan-bright);
+}
+
+.d-lbl {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.d-val {
+  font-family: var(--font-hud);
+  font-weight: 700;
+  color: #fff;
+}
+
+.debrief-buttons {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+
+.secondary-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+/* MEDIA QUERIES FOR MOBILE */
+@media (max-width: 850px) {
+  .hangar-panel {
+    width: calc(100% - 40px);
+    left: 20px;
+    top: 70px;
+  }
+  .hud-ladder-left, .hud-ladder-right {
+    display: none;
+  }
+  .hud-bottom-left {
+    width: 170px;
+    bottom: 15px;
+    left: 15px;
+  }
+  .hud-bottom-center {
+    display: none;
+  }
+}
+

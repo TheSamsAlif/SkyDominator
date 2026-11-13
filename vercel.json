@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm --prefix SkyDominator-Web run build",
+  "outputDirectory": "SkyDominator-Web/dist"
+}
