@@ -1323,18 +1323,25 @@ body, html {
   color: #fff;
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1080px) {
   .hangar-mobile-nav {
-    display: flex;
+    display: flex !important;
+    justify-content: center;
+    gap: 12px;
+    position: absolute;
+    top: 76px;
+    left: 0;
+    right: 0;
+    z-index: 50;
   }
 
   .hangar-panel.left-panel,
   .hangar-panel.right-panel {
-    top: 130px;
-    left: 16px;
-    right: 16px;
-    width: auto;
-    max-height: calc(100vh - 280px);
+    top: 130px !important;
+    left: 16px !important;
+    right: 16px !important;
+    width: auto !important;
+    max-height: calc(100vh - 275px) !important;
   }
 
   .hangar-panel.hidden-mobile {

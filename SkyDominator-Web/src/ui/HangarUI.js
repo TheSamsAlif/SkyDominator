@@ -145,40 +145,52 @@ export class HangarUI {
     const leftPanel = document.querySelector('.hangar-panel.left-panel');
     const rightPanel = document.querySelector('.hangar-panel.right-panel');
 
-    if (tabFighter && tabMission && leftPanel && rightPanel) {
-      tabFighter.addEventListener('click', () => {
-        tabFighter.classList.add('active');
-        tabMission.classList.remove('active');
-        leftPanel.classList.remove('hidden-mobile');
-        rightPanel.classList.add('hidden-mobile');
-      });
-
-      tabMission.addEventListener('click', () => {
-        tabMission.classList.add('active');
-        tabFighter.classList.remove('active');
-        rightPanel.classList.remove('hidden-mobile');
-        leftPanel.classList.add('hidden-mobile');
-      });
-
-      // Default state on narrow screens: show fighter panel, hide mission panel
-      if (window.innerWidth <= 1050) {
-        rightPanel.classList.add('hidden-mobile');
-      }
-
-      window.addEventListener('resize', () => {
-        if (window.innerWidth > 1050) {
-          leftPanel.classList.remove('hidden-mobile');
-          rightPanel.classList.remove('hidden-mobile');
-        } else {
-          if (tabFighter.classList.contains('active')) {
+    const applyResponsiveLayout = (activeTab = 'fighter') => {
+      if (window.innerWidth <= 1080) {
+        if (activeTab === 'fighter') {
+          if (tabFighter) tabFighter.classList.add('active');
+          if (tabMission) tabMission.classList.remove('active');
+          if (leftPanel) {
             leftPanel.classList.remove('hidden-mobile');
+            leftPanel.style.display = 'block';
+          }
+          if (rightPanel) {
             rightPanel.classList.add('hidden-mobile');
-          } else {
+            rightPanel.style.display = 'none';
+          }
+        } else {
+          if (tabMission) tabMission.classList.add('active');
+          if (tabFighter) tabFighter.classList.remove('active');
+          if (rightPanel) {
             rightPanel.classList.remove('hidden-mobile');
+            rightPanel.style.display = 'block';
+          }
+          if (leftPanel) {
             leftPanel.classList.add('hidden-mobile');
+            leftPanel.style.display = 'none';
           }
         }
+      } else {
+        if (leftPanel) {
+          leftPanel.classList.remove('hidden-mobile');
+          leftPanel.style.display = '';
+        }
+        if (rightPanel) {
+          rightPanel.classList.remove('hidden-mobile');
+          rightPanel.style.display = '';
+        }
+      }
+    };
+
+    if (tabFighter && tabMission && leftPanel && rightPanel) {
+      tabFighter.addEventListener('click', () => applyResponsiveLayout('fighter'));
+      tabMission.addEventListener('click', () => applyResponsiveLayout('mission'));
+      window.addEventListener('resize', () => {
+        const isMissionActive = tabMission.classList.contains('active');
+        applyResponsiveLayout(isMissionActive ? 'mission' : 'fighter');
       });
+      // Initial apply
+      applyResponsiveLayout('fighter');
     }
 
     this.updatePanelData();

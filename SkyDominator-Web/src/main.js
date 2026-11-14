@@ -444,10 +444,24 @@ class SkyDominatorApp {
     this.enemySquadron.clear();
     this.rebuildAircraftModel();
 
-    this.scene.background = new THREE.Color(0x040810);
-    this.scene.fog = new THREE.FogExp2(0x060c18, 0.0003);
+    // Atmosphere: Skydome provides 360-degree atmospheric panorama
+    this.scene.background = null;
+    this.scene.fog = new THREE.FogExp2(0x181024, 0.00015);
 
-    this.environment.generateEnvironment({ citySpread: 2000, groundTargets: [], weather: 'clear' });
+    // Showcase Lighting on Runway & Jet in Hangar
+    if (this.sunLight) this.scene.remove(this.sunLight);
+    this.sunLight = new THREE.DirectionalLight(0xffa855, 2.6);
+    this.sunLight.position.set(120, 95, 180);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.scene.add(this.sunLight);
+
+    if (this.ambLight) this.scene.remove(this.ambLight);
+    this.ambLight = new THREE.AmbientLight(0x2d1f33, 1.4);
+    this.scene.add(this.ambLight);
+
+    // Generate showcase environment
+    this.environment.generateEnvironment(this.selectedMission || MISSIONS[0]);
     this.aircraftMesh.position.set(0, 5, 0);
     this.aircraftMesh.quaternion.set(0, 0, 0, 1);
   }
@@ -470,9 +484,9 @@ class SkyDominatorApp {
     this.combatSystem.applyUpgrades(this.profile.upgrades);
     this.physics.applyBoostUpgrade(this.profile.upgrades.boost || 0);
 
-    // Atmosphere
-    this.scene.background = new THREE.Color(this.selectedMission.skyColor);
-    this.scene.fog = new THREE.FogExp2(this.selectedMission.fogColor, this.selectedMission.fogDensity);
+    // Atmosphere: Skydome provides 360-degree atmospheric panorama
+    this.scene.background = null;
+    this.scene.fog = new THREE.FogExp2(this.selectedMission.fogColor, this.selectedMission.fogDensity * 0.7);
 
     // Directional Sunlight
     if (this.sunLight) this.scene.remove(this.sunLight);
