@@ -47,8 +47,15 @@ export class InputManager {
     window.addEventListener('mousemove', (e) => {
       const halfW = window.innerWidth / 2;
       const halfH = window.innerHeight / 2;
-      this.mouse.x = ((e.clientX - halfW) / halfW) * this.mouseSensitivity;
-      this.mouse.y = ((e.clientY - halfH) / halfH) * this.mouseSensitivity;
+      const rawX = (e.clientX - halfW) / halfW;
+      const rawY = (e.clientY - halfH) / halfH;
+      this.mouse.x = Math.max(-1.0, Math.min(1.0, rawX * this.mouseSensitivity));
+      this.mouse.y = Math.max(-1.0, Math.min(1.0, rawY * this.mouseSensitivity));
+    });
+
+    window.addEventListener('mouseleave', () => {
+      this.mouse.x = 0;
+      this.mouse.y = 0;
     });
 
     window.addEventListener('mousedown', (e) => {

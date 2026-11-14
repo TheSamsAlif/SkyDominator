@@ -66,3 +66,4 @@ export class SaveSystem {
     return maxLevels[type] || 4;
   }
 }
+

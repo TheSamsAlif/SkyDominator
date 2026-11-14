@@ -3,9 +3,8 @@ import * as THREE from 'three';
 /**
  * Aerodynamic 6-DOF Fighter Flight Physics Engine
  * Features:
- * - Stable Quaternion-based rotation (No Gimbal Lock)
+ * - Direct Equilibrium Flight Assist (Auto-Horizon Leveling, No Somersaults)
  * - Coordinated Aerodynamic Banking Turns
- * - Automatic Horizon Leveling & Anti-Spin Assist
  * - Dynamic Lift, Thrust, Airbrake & Afterburner Boost
  * - Rock-Steady Cinematic Chase & Cockpit Cameras
  */
@@ -32,12 +31,12 @@ export class FlightPhysics {
     // Handling rates
     this.pitchSpeed = 1.35;
     this.rollSpeed = 2.4;
-    this.yawSpeed = 0.85;
+    this.yawSpeed = 1.4;
 
     // Throttle & Airspeed
     this.throttle = 0.65;
     this.speed = 190;
-    this.minSpeed = 110;
+    this.minSpeed = 120;
     this.maxSpeed = 380;
     this.boostSpeed = 520;
 
@@ -48,7 +47,7 @@ export class FlightPhysics {
     this.boostRechargeRate = 14.0;
 
     // Ground & Ceiling Limits
-    this.groundY = 15;
+    this.groundY = 18;
     this.flightCeiling = 3500;
 
     // Telemetry
@@ -103,7 +102,7 @@ export class FlightPhysics {
 
     // 1. Throttle, Boost & Airbrake
     if (input.throttleUp) this.throttle = Math.min(1.0, this.throttle + dt * 0.45);
-    if (input.throttleDown) this.throttle = Math.max(0.15, this.throttle - dt * 0.45);
+    if (input.throttleDown) this.throttle = Math.max(0.2, this.throttle - dt * 0.45);
 
     this.isAirbrake = !!input.airbrake;
     this.isAfterburner = !!input.boost && this.boostEnergy > 2;
@@ -118,35 +117,61 @@ export class FlightPhysics {
     if (this.isAfterburner) targetSpeed = this.boostSpeed;
     if (this.isAirbrake) targetSpeed *= 0.55;
 
-    const diveBonus = -Math.sin(this.pitch) * 45;
-    targetSpeed += diveBonus;
+    this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, dt * 2.2);
 
-    this.speed = THREE.MathUtils.lerp(this.speed, Math.max(this.minSpeed, targetSpeed), dt * 1.8);
+    // 2. Flight Control Inputs & Equilibrium Stabilization
+    // Deflection mapping with strong horizon auto-leveling (Zero unwanted somersaults)
+    let targetPitch = 0;
+    let targetRoll = 0;
+    let targetYawRate = 0;
 
-    // 2. Flight Control Inputs
-    const pitchInput = input.pitch || 0;
-    const rollInput = input.roll || 0;
-    const yawInput = input.yaw || 0;
+    // Keyboard inputs
+    if (input.keys['KeyW'] || input.keys['ArrowDown']) targetPitch -= 0.65; // nose down dive
+    if (input.keys['KeyS'] || input.keys['ArrowUp']) targetPitch += 0.75;   // nose up climb
 
-    const controlAuthority = THREE.MathUtils.clamp(this.speed / 180, 0.4, 1.2);
-
-    // 3. Pitch Dynamics
-    const deltaPitch = -pitchInput * this.pitchSpeed * controlAuthority * dt;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + deltaPitch, -1.35, 1.35);
-
-    // 4. Roll & Bank Dynamics
-    if (Math.abs(rollInput) > 0.05) {
-      this.roll = THREE.MathUtils.clamp(this.roll - rollInput * this.rollSpeed * controlAuthority * dt, -1.3, 1.3);
-    } else {
-      this.roll = THREE.MathUtils.lerp(this.roll, 0, dt * 2.8);
+    if (input.keys['KeyA'] || input.keys['ArrowLeft']) {
+      targetRoll += 0.70;      // bank left
+      targetYawRate += 1.35;   // turn heading left
+    }
+    if (input.keys['KeyD'] || input.keys['ArrowRight']) {
+      targetRoll -= 0.70;      // bank right
+      targetYawRate -= 1.35;   // turn heading right
     }
 
-    // 5. Coordinated Aerodynamic Turning
-    const bankTurnRate = -Math.sin(this.roll) * 1.35;
-    const directYawRate = -yawInput * this.yawSpeed * dt;
-    this.yaw += (bankTurnRate * dt) + directYawRate;
+    // Rudder Yaw (Q / E)
+    if (input.yaw) {
+      targetYawRate += input.yaw * 1.5;
+    }
 
-    // 6. Compute Stable Quaternion (YXZ Euler)
+    // Mouse Deflection Steering
+    if (Math.abs(input.mouse.y) > 0.08) {
+      targetPitch -= (input.mouse.y * 0.75);
+    }
+    if (Math.abs(input.mouse.x) > 0.08) {
+      targetRoll -= (input.mouse.x * 0.65);
+      targetYawRate -= (input.mouse.x * 1.6);
+    }
+
+    // Mobile Virtual Touch Stick
+    if (input.touchStick && input.touchStick.active) {
+      targetPitch -= (input.touchStick.deltaY * 0.75);
+      targetRoll -= (input.touchStick.deltaX * 0.65);
+      targetYawRate -= (input.touchStick.deltaX * 1.6);
+    }
+
+    // Clamp target bounds so the jet stays under full pilot control
+    targetPitch = THREE.MathUtils.clamp(targetPitch, -0.85, 0.85); // max +/- 48 deg
+    targetRoll = THREE.MathUtils.clamp(targetRoll, -1.05, 1.05);   // max +/- 60 deg
+
+    // Responsive spring-damper auto-leveling
+    this.pitch = THREE.MathUtils.lerp(this.pitch, targetPitch, dt * 4.2);
+    this.roll = THREE.MathUtils.lerp(this.roll, targetRoll, dt * 5.5);
+
+    // Coordinated aerodynamic banking turn
+    const bankTurnRate = -Math.sin(this.roll) * 1.1;
+    this.yaw += (targetYawRate + bankTurnRate) * dt;
+
+    // 3. Stable Quaternion (YXZ Euler)
     const euler = new THREE.Euler(this.pitch, this.yaw, this.roll, 'YXZ');
     this.quaternion.setFromEuler(euler);
 
@@ -154,18 +179,19 @@ export class FlightPhysics {
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion);
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
 
-    // 7. Update Velocity & Position
+    // 4. Update Velocity & Position
     this.velocity.copy(this.forward).multiplyScalar(this.speed);
     this.position.addScaledVector(this.velocity, dt);
 
+    // Low altitude soft-floor protection
     if (this.position.y < this.groundY) {
       this.position.y = this.groundY;
-      this.pitch = Math.max(0, this.pitch);
+      this.pitch = Math.max(0.08, this.pitch);
     }
 
     if (this.position.y > this.flightCeiling) {
       this.position.y = this.flightCeiling;
-      this.pitch = Math.min(0, this.pitch);
+      this.pitch = Math.min(-0.08, this.pitch);
     }
 
     if (this.mesh) {
@@ -173,14 +199,14 @@ export class FlightPhysics {
       this.mesh.quaternion.copy(this.quaternion);
     }
 
-    // 8. Telemetry Computation
+    // 5. Telemetry
     this.airspeedKts = Math.round(this.speed * 1.94384);
     this.mach = (this.speed / 340.0).toFixed(2);
     this.altitudeMeters = Math.round(this.position.y);
-    this.gForce = Math.max(1.0, 1.0 + (Math.abs(deltaPitch) * 18) + (Math.abs(bankTurnRate) * 1.2));
+    this.gForce = Math.max(1.0, 1.0 + Math.abs(targetPitch - this.pitch) * 2.5 + Math.abs(this.roll) * 1.5);
     this.isStalling = this.speed < 125 && this.position.y > 60;
 
-    // 9. Camera Update
+    // 6. Camera Update
     this.updateCamera(dt);
   }
 
@@ -188,6 +214,7 @@ export class FlightPhysics {
     if (!this.camera) return;
 
     if (this.cameraViewMode === 0) {
+      // 3rd-Person Chase Camera: Positioned behind the jet (-Z) looking forward (+Z)
       const camOffset = new THREE.Vector3(0, 5.2, -26).applyQuaternion(this.quaternion);
       const targetCamPos = this.position.clone().add(camOffset);
 
@@ -206,6 +233,7 @@ export class FlightPhysics {
       this.camera.updateProjectionMatrix();
 
     } else {
+      // 1st-Person Cockpit Camera
       const cockpitOffset = new THREE.Vector3(0, 0.95, 4.2).applyQuaternion(this.quaternion);
       this.camera.position.copy(this.position.clone().add(cockpitOffset));
 

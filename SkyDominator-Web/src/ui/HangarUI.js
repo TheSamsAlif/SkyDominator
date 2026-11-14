@@ -139,6 +139,48 @@ export class HangarUI {
       btnSettings.addEventListener('click', () => this.onOpenSettings());
     }
 
+    // Responsive Mobile/Tablet Tab Switcher (Zero overlap)
+    const tabFighter = document.getElementById('hangar-tab-fighter');
+    const tabMission = document.getElementById('hangar-tab-mission');
+    const leftPanel = document.querySelector('.hangar-panel.left-panel');
+    const rightPanel = document.querySelector('.hangar-panel.right-panel');
+
+    if (tabFighter && tabMission && leftPanel && rightPanel) {
+      tabFighter.addEventListener('click', () => {
+        tabFighter.classList.add('active');
+        tabMission.classList.remove('active');
+        leftPanel.classList.remove('hidden-mobile');
+        rightPanel.classList.add('hidden-mobile');
+      });
+
+      tabMission.addEventListener('click', () => {
+        tabMission.classList.add('active');
+        tabFighter.classList.remove('active');
+        rightPanel.classList.remove('hidden-mobile');
+        leftPanel.classList.add('hidden-mobile');
+      });
+
+      // Default state on narrow screens: show fighter panel, hide mission panel
+      if (window.innerWidth <= 1050) {
+        rightPanel.classList.add('hidden-mobile');
+      }
+
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 1050) {
+          leftPanel.classList.remove('hidden-mobile');
+          rightPanel.classList.remove('hidden-mobile');
+        } else {
+          if (tabFighter.classList.contains('active')) {
+            leftPanel.classList.remove('hidden-mobile');
+            rightPanel.classList.add('hidden-mobile');
+          } else {
+            rightPanel.classList.remove('hidden-mobile');
+            leftPanel.classList.add('hidden-mobile');
+          }
+        }
+      });
+    }
+
     this.updatePanelData();
     this.updateMissionDetails();
   }

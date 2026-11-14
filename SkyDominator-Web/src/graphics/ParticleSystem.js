@@ -220,16 +220,24 @@ export class ParticleSystem {
       b.age += dt;
       b.mesh.position.addScaledVector(b.velocity, dt);
 
-      // Hit detection against enemies
+      // Hit detection against enemies with bullet magnetism
       if (enemySquadron) {
         const enemies = enemySquadron.enemies || enemySquadron;
         if (Array.isArray(enemies)) {
           for (const enemy of enemies) {
             if (!enemy.isDead && enemy.mesh) {
-              const dist = b.mesh.position.distanceTo(enemy.mesh.position);
-              if (dist < 15.0) {
-                this.spawnExplosion(b.mesh.position, 0.5);
-                if (onHitEnemy) onHitEnemy(enemy, 35);
+              const toEnemy = enemy.mesh.position.clone().sub(b.mesh.position);
+              const dist = toEnemy.length();
+
+              // Magnetized bullet pull when close to enemy
+              if (dist < 65.0) {
+                b.velocity.lerp(toEnemy.normalize().multiplyScalar(1450), dt * 6.5);
+              }
+
+              // Generous 36m hit radius for satisfying dogfight gun kills
+              if (dist < 36.0) {
+                this.spawnExplosion(b.mesh.position, 0.6);
+                if (onHitEnemy) onHitEnemy(enemy, 45);
                 b.age = b.life;
                 break;
               }

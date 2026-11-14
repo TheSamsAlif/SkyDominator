@@ -266,14 +266,63 @@ body, html {
   box-shadow: 0 0 12px var(--cyan-bright);
 }
 
-/* Left Panel */
+/* Hangar Floating Panels */
+.hangar-mobile-nav {
+  display: none;
+  justify-content: center;
+  gap: 12px;
+  position: absolute;
+  top: 78px;
+  left: 0;
+  right: 0;
+  z-index: 30;
+}
+
+.hangar-nav-pill {
+  background: rgba(14, 26, 42, 0.92);
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  color: #a0aec0;
+  font-family: var(--font-hud);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s;
+}
+
+.hangar-nav-pill.active {
+  background: var(--cyan-bright);
+  color: #040810;
+  border-color: var(--cyan-bright);
+  box-shadow: 0 0 18px rgba(0, 243, 255, 0.6);
+}
+
 .hangar-panel {
   position: absolute;
-  top: 90px;
-  left: 30px;
-  width: 390px;
-  max-height: calc(100vh - 240px);
+  top: 85px;
+  max-height: calc(100vh - 220px);
   overflow-y: auto;
+  background: rgba(8, 16, 26, 0.92);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  padding: 22px;
+  border-radius: 6px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  z-index: 20;
+}
+
+.hangar-panel.left-panel {
+  left: 28px;
+  width: 380px;
+}
+
+.hangar-panel.right-panel {
+  right: 28px;
+  left: auto;
+  width: 400px;
 }
 
 .panel-box {
@@ -1274,12 +1323,24 @@ body, html {
   color: #fff;
 }
 
-@media (max-width: 850px) {
-  .hangar-panel {
-    width: calc(100% - 40px);
-    left: 20px;
-    top: 70px;
+@media (max-width: 1050px) {
+  .hangar-mobile-nav {
+    display: flex;
   }
+
+  .hangar-panel.left-panel,
+  .hangar-panel.right-panel {
+    top: 130px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100vh - 280px);
+  }
+
+  .hangar-panel.hidden-mobile {
+    display: none !important;
+  }
+
   .hud-ladder-left, .hud-ladder-right, .hud-bottom-center {
     display: none;
   }

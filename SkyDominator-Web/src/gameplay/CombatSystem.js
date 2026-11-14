@@ -41,6 +41,7 @@ export class CombatSystem {
     this.lockProgress = 0.0;
     this.isLocked = false;
     this.lockBeepTimer = 0;
+    this.lockGraceTimer = 0;
 
     // Shared materials
     this.missileMat = new THREE.MeshStandardMaterial({
@@ -144,7 +145,7 @@ export class CombatSystem {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
 
     let bestTarget = null;
-    let closestDist = 8000;
+    let closestDist = 9500;
 
     for (const enemy of enemySquadron.enemies) {
       if (enemy.isDead || !enemy.mesh) continue;
@@ -155,7 +156,8 @@ export class CombatSystem {
       if (dist < closestDist) {
         toEnemy.normalize();
         const angle = Math.acos(THREE.MathUtils.clamp(forward.dot(toEnemy), -1, 1));
-        if (angle < (45 * Math.PI / 180)) {
+        // Generous 65-degree forward radar lock cone
+        if (angle < (65 * Math.PI / 180)) {
           bestTarget = enemy;
           closestDist = dist;
         }
@@ -164,18 +166,22 @@ export class CombatSystem {
 
     if (bestTarget) {
       this.currentTarget = bestTarget;
-      this.lockProgress = Math.min(1.0, this.lockProgress + dt * 1.2);
-      this.isLocked = (this.lockProgress >= 1.0);
+      this.lockGraceTimer = 1.6; // Keep target locked even during high-G banking
+      this.lockProgress = Math.min(1.0, this.lockProgress + dt * 1.5);
+      this.isLocked = (this.lockProgress >= 0.85);
 
       this.lockBeepTimer += dt;
-      const beepInterval = this.isLocked ? 0.12 : 0.35;
+      const beepInterval = this.isLocked ? 0.10 : 0.30;
       if (this.lockBeepTimer >= beepInterval) {
         this.lockBeepTimer = 0;
         if (this.audio) this.audio.playLockTone(this.isLocked);
       }
+    } else if (this.currentTarget && !this.currentTarget.isDead && this.lockGraceTimer > 0) {
+      this.lockGraceTimer -= dt;
+      // Retain lock status during evasive transitions
     } else {
       this.currentTarget = null;
-      this.lockProgress = Math.max(0, this.lockProgress - dt * 2.0);
+      this.lockProgress = Math.max(0, this.lockProgress - dt * 1.5);
       this.isLocked = false;
     }
   }
@@ -199,10 +205,10 @@ export class CombatSystem {
 
     this.missiles.push({
       mesh: group,
-      velocity: forward.clone().multiplyScalar(320).add(playerVel),
+      velocity: forward.clone().multiplyScalar(450).add(playerVel),
       target: target,
-      life: 8.0,
-      turnRate: 3.8
+      life: 9.0,
+      turnRate: 5.2
     });
   }
 
@@ -216,11 +222,11 @@ export class CombatSystem {
         const currentDir = m.velocity.clone().normalize();
 
         currentDir.lerp(toTarget, m.turnRate * dt).normalize();
-        m.velocity.copy(currentDir.multiplyScalar(780));
+        m.velocity.copy(currentDir.multiplyScalar(850));
         m.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), currentDir);
 
         const dist = m.mesh.position.distanceTo(m.target.mesh.position);
-        if (dist < 20.0) {
+        if (dist < 28.0) {
           this.particles.spawnExplosion(m.mesh.position, 2.2);
           if (this.audio) this.audio.playExplosion(true);
           onEnemyHit(m.target, 450);
