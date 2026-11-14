@@ -1,16 +1,18 @@
 import { AIRCRAFT_ROSTER, SKINS_PALETTE } from '../core/AircraftData.js';
 import { MISSIONS } from '../core/Missions.js';
+import { SaveSystem } from '../core/SaveSystem.js';
 
 /**
- * Interactive 3D Hangar Bay & Customization UI Controller
+ * Interactive 3D Hangar Bay, Customization UI & Tech Bay Upgrade Shop Controller
  */
 export class HangarUI {
-  constructor(onSelectAircraft, onSelectSkin, onSelectMission, onSelectDifficulty, onLaunchMission) {
+  constructor(onSelectAircraft, onSelectSkin, onSelectMission, onSelectDifficulty, onLaunchMission, onOpenSettings = null) {
     this.onSelectAircraft = onSelectAircraft;
     this.onSelectSkin = onSelectSkin;
     this.onSelectMission = onSelectMission;
     this.onSelectDifficulty = onSelectDifficulty;
     this.onLaunchMission = onLaunchMission;
+    this.onOpenSettings = onOpenSettings;
 
     this.currentAircraftIndex = 0;
     this.currentMissionIndex = 0;
@@ -18,7 +20,11 @@ export class HangarUI {
     this.currentDifficulty = 'normal';
     this.isTestThrust = false;
 
+    this.profile = SaveSystem.loadProfile();
+
     this.initDOM();
+    this.initUpgradeShop();
+    this.updateCreditsDisplay();
   }
 
   initDOM() {
@@ -127,8 +133,129 @@ export class HangarUI {
       });
     }
 
+    // Settings Button in Hangar Header
+    const btnSettings = document.getElementById('btn-open-settings');
+    if (btnSettings && this.onOpenSettings) {
+      btnSettings.addEventListener('click', () => this.onOpenSettings());
+    }
+
     this.updatePanelData();
     this.updateMissionDetails();
+  }
+
+  initUpgradeShop() {
+    const btnOpenUpgrades = document.getElementById('btn-open-upgrades');
+    const upgradeModal = document.getElementById('upgrade-modal');
+    const btnCloseUpgrades = document.getElementById('btn-close-upgrades');
+
+    if (btnOpenUpgrades && upgradeModal) {
+      btnOpenUpgrades.addEventListener('click', () => {
+        this.profile = SaveSystem.loadProfile();
+        this.renderUpgradeCards();
+        upgradeModal.classList.remove('hidden');
+      });
+    }
+
+    if (btnCloseUpgrades && upgradeModal) {
+      btnCloseUpgrades.addEventListener('click', () => {
+        upgradeModal.classList.add('hidden');
+      });
+    }
+  }
+
+  updateCreditsDisplay() {
+    const hangarCredits = document.getElementById('hangar-credits');
+    const modalCredits = document.getElementById('upgrade-modal-credits');
+    const formatted = `${(this.profile.credits || 0).toLocaleString()} CR`;
+
+    if (hangarCredits) hangarCredits.textContent = formatted;
+    if (modalCredits) modalCredits.textContent = formatted;
+  }
+
+  renderUpgradeCards() {
+    const container = document.getElementById('upgrade-grid-container');
+    if (!container) return;
+
+    this.updateCreditsDisplay();
+
+    const upgradeDefs = [
+      {
+        id: 'armor',
+        name: 'NANOTUBE ARMOR PLATING',
+        desc: 'Reinforces fuselage honeycomb framework with layered carbon nanotubes.',
+        effect: (lvl) => `Hull HP: +${lvl * 20}%`,
+        max: SaveSystem.getMaxLevel('armor')
+      },
+      {
+        id: 'missiles',
+        name: 'APEX-9 MISSILE MAGAZINE',
+        desc: 'Expanded internal weapon bays for long-range air-to-air radar homing missiles.',
+        effect: (lvl) => `Missile Ammo: +${lvl * 2} Units`,
+        max: SaveSystem.getMaxLevel('missiles')
+      },
+      {
+        id: 'flares',
+        name: 'COUNTERMEASURE DISPENSER',
+        desc: 'Advanced magnesium flare cartridges to spoof incoming heat-seeking missiles.',
+        effect: (lvl) => `Flare Decoys: +${lvl * 4} Units`,
+        max: SaveSystem.getMaxLevel('flares')
+      },
+      {
+        id: 'boost',
+        name: 'VARIABLE TURBINE TUNING',
+        desc: 'Afterburner flow tuning enables faster recharge and sustained supersonic boost.',
+        effect: (lvl) => `Boost Recharge: +${lvl * 25}%`,
+        max: SaveSystem.getMaxLevel('boost')
+      }
+    ];
+
+    container.innerHTML = upgradeDefs.map(u => {
+      const currentLevel = this.profile.upgrades[u.id] || 0;
+      const isMaxed = currentLevel >= u.max;
+      const cost = isMaxed ? 0 : SaveSystem.getUpgradeCost(u.id, currentLevel);
+      const canAfford = this.profile.credits >= cost && !isMaxed;
+
+      let pipsHtml = '';
+      for (let i = 1; i <= u.max; i++) {
+        pipsHtml += `<div class="upgrade-pip ${i <= currentLevel ? 'filled' : ''}"></div>`;
+      }
+
+      return `
+        <div class="upgrade-card" data-upgrade="${u.id}">
+          <div class="upgrade-card-header">
+            <span class="upgrade-name">${u.name}</span>
+            <span class="upgrade-level">LVL ${currentLevel} / ${u.max}</span>
+          </div>
+          <p class="upgrade-desc">${u.desc}</p>
+          <div class="upgrade-pips-track">${pipsHtml}</div>
+          <div class="upgrade-effect">${u.effect(currentLevel)}</div>
+          <div class="upgrade-action-row">
+            <span class="upgrade-cost ${canAfford ? 'highlight' : (isMaxed ? 'highlight-cyan' : 'cost-expensive')}">
+              ${isMaxed ? 'MAX UPGRADE' : `${cost.toLocaleString()} CR`}
+            </span>
+            <button class="tactical-btn ${canAfford ? 'primary-glow' : 'secondary-btn'} btn-buy-upgrade" 
+              data-upgrade="${u.id}" ${canAfford ? '' : 'disabled'}>
+              ${isMaxed ? 'COMPLETED' : 'UPGRADE'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.btn-buy-upgrade').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.upgrade;
+        const currentLevel = this.profile.upgrades[type] || 0;
+        const cost = SaveSystem.getUpgradeCost(type, currentLevel);
+
+        if (this.profile.credits >= cost && currentLevel < SaveSystem.getMaxLevel(type)) {
+          this.profile.credits -= cost;
+          this.profile.upgrades[type] = currentLevel + 1;
+          SaveSystem.saveProfile(this.profile);
+          this.renderUpgradeCards();
+        }
+      });
+    });
   }
 
   selectAircraftIndex(idx) {

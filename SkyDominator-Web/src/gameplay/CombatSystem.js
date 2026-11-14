@@ -10,30 +10,30 @@ export class CombatSystem {
     this.audio = soundManager;
 
     // Player Vitals
-    this.playerHealth = 100;
-    this.playerShield = 100;
     this.maxHealth = 100;
+    this.playerHealth = 100;
     this.maxShield = 100;
+    this.playerShield = 100;
 
-    // Cannon (Vulcan 20mm)
+    // Cannon
     this.cannonCooldown = 0;
     this.cannonRate = 0.08;
 
-    // Missiles (Air-to-Air Homing)
+    // Missiles
     this.missiles = [];
-    this.missileAmmo = 8;
     this.maxMissiles = 8;
+    this.missileAmmo = 8;
     this.missileCooldown = 0;
 
-    // Bombs (Air-to-Ground Precision Strike)
+    // Bombs
     this.bombs = [];
-    this.bombAmmo = 4;
     this.maxBombs = 4;
+    this.bombAmmo = 4;
     this.bombCooldown = 0;
 
     // Flares
-    this.flareAmmo = 12;
     this.maxFlares = 12;
+    this.flareAmmo = 12;
     this.flareCooldown = 0;
 
     // Lock-on Tracking
@@ -54,12 +54,31 @@ export class CombatSystem {
       metalness: 0.4,
       roughness: 0.6
     });
+
+    // Callback for directional damage
+    this.onDamageReceived = null;
+  }
+
+  applyUpgrades(upgrades) {
+    if (!upgrades) return;
+
+    // Armor: +20% HP per level
+    const armorBonus = (upgrades.armor || 0) * 0.20;
+    this.maxHealth = Math.round(100 * (1.0 + armorBonus));
+    this.playerHealth = this.maxHealth;
+
+    // Missiles: +2 per level
+    this.maxMissiles = 8 + (upgrades.missiles || 0) * 2;
+    this.missileAmmo = this.maxMissiles;
+
+    // Flares: +4 per level
+    this.maxFlares = 12 + (upgrades.flares || 0) * 4;
+    this.flareAmmo = this.maxFlares;
   }
 
   update(dt, playerMesh, playerVel, input, enemySquadron, groundTargetsGroup, onEnemyHit) {
     if (!playerMesh) return;
 
-    // Forward direction from player orientation (Nose = +Z)
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(playerMesh.quaternion);
 
@@ -77,7 +96,7 @@ export class CombatSystem {
       if (this.audio) this.audio.playCannonFire();
     }
 
-    // 2. Lock-on Tracking Cone
+    // 2. Lock-on Tracking
     this.updateTargetTracking(dt, playerMesh, enemySquadron);
 
     // 3. Air-to-Air Missile Launch (R / M)
@@ -136,7 +155,6 @@ export class CombatSystem {
       if (dist < closestDist) {
         toEnemy.normalize();
         const angle = Math.acos(THREE.MathUtils.clamp(forward.dot(toEnemy), -1, 1));
-        // Within 45-degree forward radar lock cone
         if (angle < (45 * Math.PI / 180)) {
           bestTarget = enemy;
           closestDist = dist;
@@ -198,10 +216,9 @@ export class CombatSystem {
         const currentDir = m.velocity.clone().normalize();
 
         currentDir.lerp(toTarget, m.turnRate * dt).normalize();
-        m.velocity.copy(currentDir.multiplyScalar(780)); // Mach 2+
+        m.velocity.copy(currentDir.multiplyScalar(780));
         m.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), currentDir);
 
-        // Hit Check
         const dist = m.mesh.position.distanceTo(m.target.mesh.position);
         if (dist < 20.0) {
           this.particles.spawnExplosion(m.mesh.position, 2.2);
@@ -233,7 +250,6 @@ export class CombatSystem {
     mesh.position.copy(playerMesh.position).add(new THREE.Vector3(0, -1.5, 0));
     mesh.quaternion.copy(playerMesh.quaternion);
 
-    // Initial velocity: forward momentum minus vertical drop
     const vel = forward.clone().multiplyScalar(160).add(playerVel.clone().multiplyScalar(0.5));
     vel.y -= 15;
 
@@ -252,17 +268,14 @@ export class CombatSystem {
       const b = this.bombs[i];
       b.life -= dt;
 
-      // Ballistic gravity
       b.velocity.y -= 95 * dt;
       b.mesh.position.addScaledVector(b.velocity, dt);
 
-      // Pitch bomb toward trajectory
       const dir = b.velocity.clone().normalize();
       b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
 
       let detonated = b.mesh.position.y <= 3;
 
-      // Check damage against ground structures
       if (groundTargetsGroup) {
         groundTargetsGroup.children.forEach((gt) => {
           if (gt.userData && gt.userData.isAlive) {
@@ -284,13 +297,31 @@ export class CombatSystem {
     }
   }
 
-  applyDamageToPlayer(damage) {
+  applyDamageToPlayer(damage, attackerPos = null, playerMesh = null) {
     if (this.playerShield > 0) {
       const absorbed = Math.min(this.playerShield, damage);
       this.playerShield -= absorbed;
       damage -= absorbed;
     }
     this.playerHealth = Math.max(0, this.playerHealth - damage);
+
+    // Directional damage calculation
+    if (attackerPos && playerMesh && this.onDamageReceived) {
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(playerMesh.quaternion);
+      const toAttacker = attackerPos.clone().sub(playerMesh.position).normalize();
+
+      const fDot = forward.dot(toAttacker);
+      const rDot = right.dot(toAttacker);
+
+      let direction = 'front';
+      if (fDot < -0.4) direction = 'back';
+      else if (rDot > 0.4) direction = 'right';
+      else if (rDot < -0.4) direction = 'left';
+
+      this.onDamageReceived(direction);
+    }
+
     return this.playerHealth <= 0;
   }
 
@@ -300,5 +331,20 @@ export class CombatSystem {
     this.missileAmmo = this.maxMissiles;
     this.bombAmmo = this.maxBombs;
     this.flareAmmo = this.maxFlares;
+  }
+
+  clear() {
+    for (const m of this.missiles) {
+      if (m.mesh) this.scene.remove(m.mesh);
+    }
+    this.missiles = [];
+
+    for (const b of this.bombs) {
+      if (b.mesh) this.scene.remove(b.mesh);
+    }
+    this.bombs = [];
+    this.currentTarget = null;
+    this.isLocked = false;
+    this.lockProgress = 0;
   }
 }

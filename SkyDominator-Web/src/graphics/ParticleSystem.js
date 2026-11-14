@@ -1,18 +1,38 @@
 import * as THREE from 'three';
 
 /**
- * High-Performance Particle Engine for Aerial Combat VFX
+ * High-Performance Object-Pooled Particle Engine for Aerial Combat VFX
+ * Prevents garbage collection stutter during intense dogfights
  */
 export class ParticleSystem {
   constructor(scene) {
     this.scene = scene;
+
+    // Active particle arrays
     this.bullets = [];
     this.smokeParticles = [];
     this.explosions = [];
     this.flares = [];
     this.shockwaves = [];
 
-    // Reusable Materials
+    // Object Pools
+    this.bulletPool = [];
+    this.smokePool = [];
+    this.debrisPool = [];
+    this.shockwavePool = [];
+    this.flarePool = [];
+
+    // Shared Geometries (Created once)
+    this.bulletGeom = new THREE.CylinderGeometry(0.12, 0.12, 4.0, 4);
+    this.bulletGeom.rotateX(Math.PI / 2);
+
+    this.smokeGeom = new THREE.SphereGeometry(1.0, 6, 6);
+    this.debrisGeom = new THREE.DodecahedronGeometry(1.4, 0);
+    this.shockwaveGeom = new THREE.RingGeometry(1, 3, 32);
+    this.shockwaveGeom.rotateX(-Math.PI / 2);
+    this.flareGeom = new THREE.SphereGeometry(0.8, 6, 6);
+
+    // Shared Materials
     this.bulletMat = new THREE.MeshBasicMaterial({
       color: 0x00f3ff,
       blending: THREE.AdditiveBlending
@@ -47,18 +67,25 @@ export class ParticleSystem {
     });
   }
 
+  // 1. Bullets (20mm Cannon)
   spawnBullet(origin, direction, shooterVelocity) {
-    const geom = new THREE.CylinderGeometry(0.1, 0.1, 3.8, 4);
-    geom.rotateX(Math.PI / 2);
-    const mesh = new THREE.Mesh(geom, this.bulletMat);
+    let mesh;
+    if (this.bulletPool.length > 0) {
+      mesh = this.bulletPool.pop();
+      mesh.visible = true;
+    } else {
+      mesh = new THREE.Mesh(this.bulletGeom, this.bulletMat);
+      this.scene.add(mesh);
+    }
 
     mesh.position.copy(origin);
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
 
-    const speed = 1400;
-    const velocity = direction.clone().multiplyScalar(speed).add(shooterVelocity ? shooterVelocity.clone().multiplyScalar(0.4) : new THREE.Vector3());
+    const speed = 1450;
+    const velocity = direction.clone().multiplyScalar(speed).add(
+      shooterVelocity ? shooterVelocity.clone().multiplyScalar(0.4) : new THREE.Vector3()
+    );
 
-    this.scene.add(mesh);
     this.bullets.push({
       mesh,
       velocity,
@@ -67,61 +94,113 @@ export class ParticleSystem {
     });
   }
 
+  // 2. Missile Smoke Trails
   spawnMissileSmoke(position) {
-    const geom = new THREE.SphereGeometry(0.9 + Math.random() * 0.4, 6, 6);
-    const mesh = new THREE.Mesh(geom, this.smokeMat.clone());
-    mesh.position.copy(position);
-    this.scene.add(mesh);
+    let item;
+    if (this.smokePool.length > 0) {
+      item = this.smokePool.pop();
+      item.mesh.visible = true;
+      item.mat.opacity = 0.55;
+    } else {
+      const mat = this.smokeMat.clone();
+      const mesh = new THREE.Mesh(this.smokeGeom, mat);
+      this.scene.add(mesh);
+      item = { mesh, mat };
+    }
+
+    item.mesh.position.copy(position);
+    item.mesh.scale.setScalar(0.9 + Math.random() * 0.4);
 
     this.smokeParticles.push({
-      mesh,
+      mesh: item.mesh,
+      mat: item.mat,
       life: 1.1,
       maxLife: 1.1,
       growth: 3.2
     });
   }
 
+  // 3. Explosions & Shrapnel Debris
   spawnExplosion(position, scale = 1.0) {
-    const count = Math.floor(18 * scale);
+    const count = Math.min(24, Math.floor(16 * scale));
     const pieces = [];
 
     for (let i = 0; i < count; i++) {
-      const geom = new THREE.DodecahedronGeometry((1.2 + Math.random() * 1.5) * scale, 0);
-      const mesh = new THREE.Mesh(geom, (Math.random() > 0.35) ? this.fireMat.clone() : this.smokeMat.clone());
-      mesh.position.copy(position);
+      let item;
+      const isFire = Math.random() > 0.35;
+
+      if (this.debrisPool.length > 0) {
+        item = this.debrisPool.pop();
+        item.mesh.visible = true;
+        item.mat.color.setHex(isFire ? 0xff5500 : 0xb4c2ce);
+        item.mat.opacity = isFire ? 0.9 : 0.6;
+      } else {
+        const mat = (isFire ? this.fireMat : this.smokeMat).clone();
+        const mesh = new THREE.Mesh(this.debrisGeom, mat);
+        this.scene.add(mesh);
+        item = { mesh, mat };
+      }
+
+      item.mesh.position.copy(position);
+      const pieceScale = (0.8 + Math.random() * 1.2) * scale;
+      item.mesh.scale.setScalar(pieceScale);
 
       const vel = new THREE.Vector3(
-        (Math.random() - 0.5) * 80 * scale,
-        (Math.random() - 0.5) * 80 * scale,
-        (Math.random() - 0.5) * 80 * scale
+        (Math.random() - 0.5) * 85 * scale,
+        (Math.random() - 0.5) * 85 * scale,
+        (Math.random() - 0.5) * 85 * scale
       );
 
-      this.scene.add(mesh);
-      pieces.push({ mesh, vel, life: 1.0, maxLife: 1.0 });
+      pieces.push({
+        mesh: item.mesh,
+        mat: item.mat,
+        vel,
+        life: 1.0,
+        maxLife: 1.0
+      });
     }
 
     this.explosions.push(pieces);
     this.spawnShockwave(position, 40 * scale);
   }
 
+  // 4. Supersonic Shockwaves
   spawnShockwave(position, maxRadius = 40) {
-    const ringGeo = new THREE.RingGeometry(1, 3, 32);
-    ringGeo.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(ringGeo, this.shockwaveMat.clone());
-    mesh.position.copy(position);
-    this.scene.add(mesh);
+    let item;
+    if (this.shockwavePool.length > 0) {
+      item = this.shockwavePool.pop();
+      item.mesh.visible = true;
+      item.mat.opacity = 0.8;
+    } else {
+      const mat = this.shockwaveMat.clone();
+      const mesh = new THREE.Mesh(this.shockwaveGeom, mat);
+      this.scene.add(mesh);
+      item = { mesh, mat };
+    }
+
+    item.mesh.position.copy(position);
+    item.mesh.scale.set(1, 1, 1);
 
     this.shockwaves.push({
-      mesh,
+      mesh: item.mesh,
+      mat: item.mat,
       life: 0.7,
       maxLife: 0.7,
       maxRadius
     });
   }
 
+  // 5. Thermal Countermeasure Flares
   spawnFlare(position, aircraftVelocity) {
-    const geom = new THREE.SphereGeometry(0.8, 6, 6);
-    const mesh = new THREE.Mesh(geom, this.flareMat);
+    let mesh;
+    if (this.flarePool.length > 0) {
+      mesh = this.flarePool.pop();
+      mesh.visible = true;
+    } else {
+      mesh = new THREE.Mesh(this.flareGeom, this.flareMat);
+      this.scene.add(mesh);
+    }
+
     mesh.position.copy(position);
 
     const vel = (aircraftVelocity ? aircraftVelocity.clone().multiplyScalar(0.4) : new THREE.Vector3()).add(new THREE.Vector3(
@@ -130,10 +209,10 @@ export class ParticleSystem {
       (Math.random() - 0.5) * 45
     ));
 
-    this.scene.add(mesh);
     this.flares.push({ mesh, vel, life: 3.8 });
   }
 
+  // Frame Update Loop
   update(dt, enemySquadron, onHitEnemy) {
     // 1. Update Bullets
     for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -148,7 +227,7 @@ export class ParticleSystem {
           for (const enemy of enemies) {
             if (!enemy.isDead && enemy.mesh) {
               const dist = b.mesh.position.distanceTo(enemy.mesh.position);
-              if (dist < 14.0) {
+              if (dist < 15.0) {
                 this.spawnExplosion(b.mesh.position, 0.5);
                 if (onHitEnemy) onHitEnemy(enemy, 35);
                 b.age = b.life;
@@ -160,8 +239,8 @@ export class ParticleSystem {
       }
 
       if (b.age >= b.life || b.mesh.position.y <= 0) {
-        this.scene.remove(b.mesh);
-        b.mesh.geometry.dispose();
+        b.mesh.visible = false;
+        this.bulletPool.push(b.mesh);
         this.bullets.splice(i, 1);
       }
     }
@@ -173,12 +252,11 @@ export class ParticleSystem {
       const progress = 1.0 - (s.life / s.maxLife);
       const scale = 1.0 + progress * s.growth;
       s.mesh.scale.set(scale, scale, scale);
-      s.mesh.material.opacity = Math.max(0, (s.life / s.maxLife) * 0.55);
+      s.mat.opacity = Math.max(0, (s.life / s.maxLife) * 0.55);
 
       if (s.life <= 0) {
-        this.scene.remove(s.mesh);
-        s.mesh.geometry.dispose();
-        s.mesh.material.dispose();
+        s.mesh.visible = false;
+        this.smokePool.push({ mesh: s.mesh, mat: s.mat });
         this.smokeParticles.splice(i, 1);
       }
     }
@@ -192,10 +270,14 @@ export class ParticleSystem {
         p.life -= dt;
         p.mesh.position.addScaledVector(p.vel, dt);
         p.mesh.scale.multiplyScalar(1.0 + dt * 1.4);
-        p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
+        p.mat.opacity = Math.max(0, p.life / p.maxLife);
 
-        if (p.life > 0) allDead = false;
-        else this.scene.remove(p.mesh);
+        if (p.life > 0) {
+          allDead = false;
+        } else if (p.mesh.visible) {
+          p.mesh.visible = false;
+          this.debrisPool.push({ mesh: p.mesh, mat: p.mat });
+        }
       }
 
       if (allDead) {
@@ -210,12 +292,11 @@ export class ParticleSystem {
       const progress = 1.0 - (sw.life / sw.maxLife);
       const rad = progress * sw.maxRadius;
       sw.mesh.scale.set(rad, rad, 1);
-      sw.mesh.material.opacity = Math.max(0, (1.0 - progress) * 0.8);
+      sw.mat.opacity = Math.max(0, (1.0 - progress) * 0.8);
 
       if (sw.life <= 0) {
-        this.scene.remove(sw.mesh);
-        sw.mesh.geometry.dispose();
-        sw.mesh.material.dispose();
+        sw.mesh.visible = false;
+        this.shockwavePool.push({ mesh: sw.mesh, mat: sw.mat });
         this.shockwaves.splice(i, 1);
       }
     }
@@ -232,10 +313,45 @@ export class ParticleSystem {
       }
 
       if (f.life <= 0 || f.mesh.position.y <= 0) {
-        this.scene.remove(f.mesh);
-        f.mesh.geometry.dispose();
+        f.mesh.visible = false;
+        this.flarePool.push(f.mesh);
         this.flares.splice(i, 1);
       }
     }
+  }
+
+  // Clear all active particles without memory leaks
+  clear() {
+    for (const b of this.bullets) {
+      b.mesh.visible = false;
+      this.bulletPool.push(b.mesh);
+    }
+    this.bullets = [];
+
+    for (const s of this.smokeParticles) {
+      s.mesh.visible = false;
+      this.smokePool.push({ mesh: s.mesh, mat: s.mat });
+    }
+    this.smokeParticles = [];
+
+    for (const exp of this.explosions) {
+      for (const p of exp) {
+        p.mesh.visible = false;
+        this.debrisPool.push({ mesh: p.mesh, mat: p.mat });
+      }
+    }
+    this.explosions = [];
+
+    for (const sw of this.shockwaves) {
+      sw.mesh.visible = false;
+      this.shockwavePool.push({ mesh: sw.mesh, mat: sw.mat });
+    }
+    this.shockwaves = [];
+
+    for (const f of this.flares) {
+      f.mesh.visible = false;
+      this.flarePool.push(f.mesh);
+    }
+    this.flares = [];
   }
 }

@@ -28,3 +28,5 @@ SkyDominator/DerivedDataCache/
 .idea/
 .vscode/
 
+
+.vercel

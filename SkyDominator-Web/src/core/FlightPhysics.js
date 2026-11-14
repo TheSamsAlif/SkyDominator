@@ -25,18 +25,18 @@ export class FlightPhysics {
     this.right = new THREE.Vector3(1, 0, 0);
 
     // Aerodynamic rotation angles (Euler radians)
-    this.pitch = 0; // Pitch angle relative to horizon (-80 to +80 deg)
-    this.yaw = 0;   // Compass heading angle
-    this.roll = 0;  // Bank angle relative to horizon (-75 to +75 deg)
+    this.pitch = 0;
+    this.yaw = 0;
+    this.roll = 0;
 
     // Handling rates
-    this.pitchSpeed = 1.35; // rad/s
-    this.rollSpeed = 2.4;   // rad/s
-    this.yawSpeed = 0.85;   // rad/s
+    this.pitchSpeed = 1.35;
+    this.rollSpeed = 2.4;
+    this.yawSpeed = 0.85;
 
     // Throttle & Airspeed
-    this.throttle = 0.65; // 0.1 to 1.0
-    this.speed = 190;     // m/s (approx 680 km/h)
+    this.throttle = 0.65;
+    this.speed = 190;
     this.minSpeed = 110;
     this.maxSpeed = 380;
     this.boostSpeed = 520;
@@ -45,6 +45,7 @@ export class FlightPhysics {
     this.isAirbrake = false;
     this.boostEnergy = 100.0;
     this.maxBoostEnergy = 100.0;
+    this.boostRechargeRate = 14.0;
 
     // Ground & Ceiling Limits
     this.groundY = 15;
@@ -63,6 +64,10 @@ export class FlightPhysics {
     // Camera smoothing targets
     this.currentCamPos = new THREE.Vector3(0, 455, -28);
     this.currentCamLook = new THREE.Vector3(0, 451, 30);
+  }
+
+  applyBoostUpgrade(level = 0) {
+    this.boostRechargeRate = 14.0 * (1.0 + level * 0.25);
   }
 
   setAircraftMesh(mesh) {
@@ -106,79 +111,63 @@ export class FlightPhysics {
     if (this.isAfterburner) {
       this.boostEnergy = Math.max(0, this.boostEnergy - 28 * dt);
     } else {
-      this.boostEnergy = Math.min(this.maxBoostEnergy, this.boostEnergy + 14 * dt);
+      this.boostEnergy = Math.min(this.maxBoostEnergy, this.boostEnergy + this.boostRechargeRate * dt);
     }
 
-    // Target speed calculation based on throttle and altitude
     let targetSpeed = this.minSpeed + this.throttle * (this.maxSpeed - this.minSpeed);
     if (this.isAfterburner) targetSpeed = this.boostSpeed;
     if (this.isAirbrake) targetSpeed *= 0.55;
 
-    // Pitch speed bonus/penalty (gravity assist during dives/climbs)
     const diveBonus = -Math.sin(this.pitch) * 45;
     targetSpeed += diveBonus;
 
-    // Smooth speed acceleration
     this.speed = THREE.MathUtils.lerp(this.speed, Math.max(this.minSpeed, targetSpeed), dt * 1.8);
 
     // 2. Flight Control Inputs
-    // Pitch: W/Up = Pitch Down (dive), S/Down = Pitch Up (climb)
     const pitchInput = input.pitch || 0;
-    // Roll: A/Left = Roll Left, D/Right = Roll Right
     const rollInput = input.roll || 0;
-    // Yaw: Q = Yaw Left, E = Yaw Right
     const yawInput = input.yaw || 0;
 
-    // Speed-dependent control authority
     const controlAuthority = THREE.MathUtils.clamp(this.speed / 180, 0.4, 1.2);
 
     // 3. Pitch Dynamics
-    // S pushes pitch positive (nose up), W pushes pitch negative (nose down)
     const deltaPitch = -pitchInput * this.pitchSpeed * controlAuthority * dt;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + deltaPitch, -1.35, 1.35); // clamp at ~77 degrees
+    this.pitch = THREE.MathUtils.clamp(this.pitch + deltaPitch, -1.35, 1.35);
 
     // 4. Roll & Bank Dynamics
     if (Math.abs(rollInput) > 0.05) {
-      // Pilot rolling actively
       this.roll = THREE.MathUtils.clamp(this.roll - rollInput * this.rollSpeed * controlAuthority * dt, -1.3, 1.3);
     } else {
-      // Auto-leveling assist: gently return wings to horizontal when stick is centered
       this.roll = THREE.MathUtils.lerp(this.roll, 0, dt * 2.8);
     }
 
-    // 5. Coordinated Aerodynamic Turning (Banking induces Yaw turn)
-    // When aircraft is banked, lift force naturally turns the nose in that direction
+    // 5. Coordinated Aerodynamic Turning
     const bankTurnRate = -Math.sin(this.roll) * 1.35;
     const directYawRate = -yawInput * this.yawSpeed * dt;
     this.yaw += (bankTurnRate * dt) + directYawRate;
 
-    // 6. Compute Stable Quaternion (YXZ Euler: Heading -> Pitch -> Bank)
+    // 6. Compute Stable Quaternion (YXZ Euler)
     const euler = new THREE.Euler(this.pitch, this.yaw, this.roll, 'YXZ');
     this.quaternion.setFromEuler(euler);
 
-    // Extract world directional vectors (Nose = +Z)
     this.forward.set(0, 0, 1).applyQuaternion(this.quaternion);
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion);
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
 
     // 7. Update Velocity & Position
-    // Fighter jet moves forward along its nose
     this.velocity.copy(this.forward).multiplyScalar(this.speed);
     this.position.addScaledVector(this.velocity, dt);
 
-    // Ground collision prevention
     if (this.position.y < this.groundY) {
       this.position.y = this.groundY;
-      this.pitch = Math.max(0, this.pitch); // push nose up
+      this.pitch = Math.max(0, this.pitch);
     }
 
-    // Flight ceiling clamp
     if (this.position.y > this.flightCeiling) {
       this.position.y = this.flightCeiling;
-      this.pitch = Math.min(0, this.pitch); // push nose down
+      this.pitch = Math.min(0, this.pitch);
     }
 
-    // Sync 3D mesh
     if (this.mesh) {
       this.mesh.position.copy(this.position);
       this.mesh.quaternion.copy(this.quaternion);
@@ -199,32 +188,24 @@ export class FlightPhysics {
     if (!this.camera) return;
 
     if (this.cameraViewMode === 0) {
-      // === 3RD PERSON CHASE CAMERA ===
-      // Behind the jet (negative Z along nose) and slightly above (positive Y)
       const camOffset = new THREE.Vector3(0, 5.2, -26).applyQuaternion(this.quaternion);
       const targetCamPos = this.position.clone().add(camOffset);
 
-      // Smooth camera position follow
       this.currentCamPos.lerp(targetCamPos, dt * 9.0);
       this.camera.position.copy(this.currentCamPos);
 
-      // Look at point ahead of the jet (+Z along nose)
       const lookOffset = new THREE.Vector3(0, 1.8, 35).applyQuaternion(this.quaternion);
       const targetLook = this.position.clone().add(lookOffset);
       this.currentCamLook.lerp(targetLook, dt * 14.0);
 
       this.camera.lookAt(this.currentCamLook);
-
-      // Camera up aligned with aircraft up for that authentic cockpit/chase banking feel
       this.camera.up.lerp(this.up, dt * 5.0).normalize();
 
-      // Dynamic FOV based on speed / afterburner
       const targetFOV = this.isAfterburner ? 86 : 74;
       this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFOV, dt * 3.0);
       this.camera.updateProjectionMatrix();
 
     } else {
-      // === 1ST PERSON COCKPIT CAMERA ===
       const cockpitOffset = new THREE.Vector3(0, 0.95, 4.2).applyQuaternion(this.quaternion);
       this.camera.position.copy(this.position.clone().add(cockpitOffset));
 

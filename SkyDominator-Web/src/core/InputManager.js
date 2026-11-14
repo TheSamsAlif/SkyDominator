@@ -16,7 +16,10 @@ export class InputManager {
     this.fireMissile = false;
     this.fireBomb = false;
     this.deployFlare = false;
-    this.cycleCamera = false;
+    this.cycleCameraTriggered = false;
+    this.pauseTriggered = false;
+
+    this.mouseSensitivity = 1.0;
 
     this.keys = {};
     this.mouse = { x: 0, y: 0, down: false };
@@ -29,6 +32,12 @@ export class InputManager {
   setupListeners() {
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
+      if (e.code === 'Escape' || e.code === 'KeyP') {
+        this.pauseTriggered = true;
+      }
+      if (e.code === 'KeyV') {
+        this.cycleCameraTriggered = true;
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -38,8 +47,8 @@ export class InputManager {
     window.addEventListener('mousemove', (e) => {
       const halfW = window.innerWidth / 2;
       const halfH = window.innerHeight / 2;
-      this.mouse.x = (e.clientX - halfW) / halfW;
-      this.mouse.y = (e.clientY - halfH) / halfH;
+      this.mouse.x = ((e.clientX - halfW) / halfW) * this.mouseSensitivity;
+      this.mouse.y = ((e.clientY - halfH) / halfH) * this.mouseSensitivity;
     });
 
     window.addEventListener('mousedown', (e) => {
@@ -121,11 +130,22 @@ export class InputManager {
     bindTouchBtn('touch-btn-fire-missile', () => { this.fireMissile = true; }, () => { this.fireMissile = false; });
     bindTouchBtn('touch-btn-bomb', () => { this.fireBomb = true; }, () => { this.fireBomb = false; });
     bindTouchBtn('touch-btn-flare', () => { this.deployFlare = true; }, () => { this.deployFlare = false; });
-    bindTouchBtn('touch-btn-cam', () => { this.cycleCamera = true; }, () => { this.cycleCamera = false; });
+    bindTouchBtn('touch-btn-cam', () => { this.cycleCameraTriggered = true; }, () => {});
+  }
+
+  consumePauseTrigger() {
+    const triggered = this.pauseTriggered;
+    this.pauseTriggered = false;
+    return triggered;
+  }
+
+  consumeCycleCamera() {
+    const triggered = this.cycleCameraTriggered;
+    this.cycleCameraTriggered = false;
+    return triggered;
   }
 
   update() {
-    // Gamepad support
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = gamepads[0];
     if (gp) {
@@ -141,27 +161,20 @@ export class InputManager {
       return;
     }
 
-    // Touch stick override
     if (this.touchStick.active) {
       this.pitch = this.touchStick.deltaY;
       this.roll = -this.touchStick.deltaX;
       return;
     }
 
-    // Keyboard controls:
-    // W / Up = Dive (Pitch Down = +1)
-    // S / Down = Climb (Pitch Up = -1)
     let kPitch = 0;
     if (this.keys['KeyW'] || this.keys['ArrowUp']) kPitch += 1.0;
     if (this.keys['KeyS'] || this.keys['ArrowDown']) kPitch -= 1.0;
 
-    // A / Left = Bank Left (+1)
-    // D / Right = Bank Right (-1)
     let kRoll = 0;
     if (this.keys['KeyA'] || this.keys['ArrowLeft']) kRoll += 1.0;
     if (this.keys['KeyD'] || this.keys['ArrowRight']) kRoll -= 1.0;
 
-    // Subtle mouse assist if keys are not pressed
     const deadzone = 0.12;
     let mPitch = Math.abs(this.mouse.y) > deadzone ? this.mouse.y * 0.9 : 0;
     let mRoll = Math.abs(this.mouse.x) > deadzone ? -this.mouse.x * 1.1 : 0;
@@ -169,23 +182,19 @@ export class InputManager {
     this.pitch = kPitch !== 0 ? kPitch : mPitch;
     this.roll = kRoll !== 0 ? kRoll : mRoll;
 
-    // Yaw: Q = Yaw Left (+1), E = Yaw Right (-1)
     let kYaw = 0;
     if (this.keys['KeyQ']) kYaw += 1.0;
     if (this.keys['KeyE']) kYaw -= 1.0;
     this.yaw = kYaw;
 
-    // Throttle & Boost
     this.throttleUp = !!(this.keys['ShiftLeft'] || this.keys['KeyZ']);
     this.throttleDown = !!(this.keys['ControlLeft'] || this.keys['KeyX']);
-    this.boost = !!(this.keys['ShiftLeft'] || this.keys['Space'] && !this.mouse.down);
+    this.boost = !!(this.keys['ShiftLeft'] || (this.keys['Space'] && !this.mouse.down));
     this.airbrake = !!(this.keys['KeyK']);
 
-    // Weapons
     this.fireCannon = !!(this.keys['Space'] || this.mouse.down);
     this.fireMissile = !!(this.keys['KeyR'] || this.keys['KeyM']);
     this.fireBomb = !!(this.keys['KeyB']);
     this.deployFlare = !!(this.keys['KeyC'] || this.keys['KeyF']);
-    this.cycleCamera = !!(this.keys['KeyV']);
   }
 }

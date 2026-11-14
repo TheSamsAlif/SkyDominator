@@ -7,6 +7,7 @@ export class SoundManager {
     this.ctx = null;
     this.isMuted = false;
     this.isInitialized = false;
+    this.masterVolume = 0.85;
 
     // Nodes
     this.masterGain = null;
@@ -54,7 +55,7 @@ export class SoundManager {
 
       // Master Output
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(this.masterVolume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
 
       // Jet Engine Synth
@@ -75,10 +76,27 @@ export class SoundManager {
     }
   }
 
-  resume() {
+  setMasterVolume(val) {
+    this.masterVolume = Math.max(0, Math.min(1.0, val));
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.masterVolume, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  pauseAudio() {
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend();
+    }
+  }
+
+  resumeAudio() {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  resume() {
+    this.resumeAudio();
   }
 
   setupEngineSynth() {
@@ -233,12 +251,12 @@ export class SoundManager {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(isLocked ? 1250 : 820, t);
+    osc.type = isLocked ? 'square' : 'sine';
+    osc.frequency.setValueAtTime(isLocked ? 1420 : 880, t);
 
-    gain.gain.setValueAtTime(0.12, t);
-    const duration = isLocked ? 0.14 : 0.06;
-    gain.gain.exponentialRampToValueAtTime(0.01, t + duration);
+    gain.gain.setValueAtTime(isLocked ? 0.16 : 0.08, t);
+    const duration = isLocked ? 0.09 : 0.05;
+    gain.gain.exponentialRampToValueAtTime(0.005, t + duration);
 
     osc.connect(gain);
     gain.connect(this.masterGain);

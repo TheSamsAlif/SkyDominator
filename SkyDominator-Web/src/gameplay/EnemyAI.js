@@ -6,8 +6,9 @@ import { AircraftModelGenerator } from '../graphics/AircraftModelGenerator.js';
  * Intelligent Enemy Fighter AI System
  * Features:
  * - 3-Wave Combat Deployment (Vanguard, Strike, Ace Boss)
- * - Tactical Wingman V-Formation
+ * - Tactical Wingman V-Formation & Target Engagement
  * - Dynamic Evasive Break Turns & High-G Jinking
+ * - Terrain & Ocean Ground Collision Avoidance
  * - Enemy Defensive Flares against Player Missiles
  * - Difficulty scaling (Easy / Normal / Hard)
  */
@@ -160,7 +161,7 @@ export class EnemySquadronManager {
 
               const hitChance = this.difficulty === 'hard' ? 0.5 : (this.difficulty === 'easy' ? 0.2 : 0.35);
               if (distToPlayer < 750 && Math.random() < hitChance) {
-                onPlayerDamaged(20);
+                onPlayerDamaged(20, enemy.mesh.position);
               }
             }
           }
@@ -188,10 +189,10 @@ export class EnemySquadronManager {
         if (this.audio) this.audio.playDopplerFlyby(distToPlayer);
       }
 
-      // Low altitude ground avoidance
+      // Low altitude ground avoidance (keep enemy above terrain/water)
       if (enemy.mesh.position.y < 120) {
         enemy.mesh.position.y = 120;
-        enemy.mesh.rotateX(-0.05);
+        enemy.mesh.rotateX(-0.06);
       }
 
       AircraftModelGenerator.updateAfterburnerFX(enemy.mesh, 0.85, true);
@@ -261,7 +262,7 @@ export class EnemySquadronManager {
       const hitFlare = m.decoy && dist < 20;
 
       if (hitPlayer || hitFlare || m.life <= 0 || m.mesh.position.y < 15) {
-        if (hitPlayer) onPlayerDamaged(150);
+        if (hitPlayer) onPlayerDamaged(150, m.mesh.position);
         this.particles.spawnExplosion(m.mesh.position, 1.5);
         if (this.audio) this.audio.playExplosion(false);
 

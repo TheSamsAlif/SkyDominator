@@ -2,6 +2,13 @@ import * as THREE from 'three';
 
 /**
  * Military Aerial Combat Heads-Up Display (HUD) System
+ * Features:
+ * - Directional Hit Damage Flashers (Top/Bottom/Left/Right)
+ * - Real-Time Dynamic FPS & Frame Latency Counter
+ * - Safe-Zone Airbase Rearm & Repair Banner
+ * - Tactical Lock-On Audio Beep Synchronization
+ * - 3D In-World Projected Reticles for Air & Ground Targets
+ * - 360-Degree Heading Compass & Pitch Horizon Ladder
  */
 export class HUD {
   constructor(camera) {
@@ -44,16 +51,23 @@ export class HUD {
     // Radar Minimap
     this.radarBlipsContainer = document.getElementById('radar-blips-container');
 
-    // G-Force Overlays
+    // G-Force & Directional Damage Overlays
     this.fxBlackout = document.getElementById('fx-blackout');
     this.fxRedout = document.getElementById('fx-redout');
+    this.dmgTop = document.getElementById('fx-dmg-top');
+    this.dmgBottom = document.getElementById('fx-dmg-bottom');
+    this.dmgLeft = document.getElementById('fx-dmg-left');
+    this.dmgRight = document.getElementById('fx-dmg-right');
 
-    // Objectives Text & Wave Banner
+    // Objectives Text, Wave Banner & Rearm Banner
     this.objectiveText = document.getElementById('hud-objective-text');
     this.waveBanner = document.getElementById('hud-wave-banner');
+    this.rearmBanner = document.getElementById('hud-rearm-banner');
     this.radioSubtitles = document.getElementById('hud-radio-subtitles');
+    this.fpsElem = document.getElementById('hud-fps');
 
     this.subtitleTimer = 0;
+    this.lockToneTimer = 0;
   }
 
   showWaveBanner(title) {
@@ -69,6 +83,19 @@ export class HUD {
     }, 4000);
   }
 
+  showRearmBanner() {
+    if (!this.rearmBanner) return;
+    this.rearmBanner.textContent = 'AIRBASE RE-ARM & REPAIR COMPLETE';
+    this.rearmBanner.classList.remove('hidden');
+    this.rearmBanner.classList.add('flash');
+    setTimeout(() => {
+      if (this.rearmBanner) {
+        this.rearmBanner.classList.remove('flash');
+        this.rearmBanner.classList.add('hidden');
+      }
+    }, 3500);
+  }
+
   showRadioSubtitle(text) {
     if (!this.radioSubtitles) return;
     this.radioSubtitles.textContent = text;
@@ -81,7 +108,46 @@ export class HUD {
     }, 4500);
   }
 
-  update(physics, combatSystem, missionManager, enemySquadron, groundTargetsGroup) {
+  flashDamage(direction = 'front') {
+    let target = this.dmgTop;
+    if (direction === 'back') target = this.dmgBottom;
+    else if (direction === 'left') target = this.dmgLeft;
+    else if (direction === 'right') target = this.dmgRight;
+
+    if (target) {
+      target.classList.add('active');
+      setTimeout(() => {
+        target.classList.remove('active');
+      }, 420);
+    }
+  }
+
+  updateFPS(fps, frameTimeMs) {
+    if (this.fpsElem) {
+      this.fpsElem.textContent = `${Math.round(fps)} FPS // ${frameTimeMs.toFixed(1)}ms`;
+    }
+  }
+
+  updateLockTone(dt, combatSystem, soundManager) {
+    if (!soundManager || !combatSystem) return;
+
+    if (combatSystem.currentTarget && !combatSystem.currentTarget.isDead) {
+      this.lockToneTimer -= dt;
+      if (this.lockToneTimer <= 0) {
+        if (combatSystem.isLocked) {
+          soundManager.playLockTone(true);
+          this.lockToneTimer = 0.12;
+        } else if (combatSystem.lockProgress > 0) {
+          soundManager.playLockTone(false);
+          this.lockToneTimer = THREE.MathUtils.lerp(0.45, 0.18, combatSystem.lockProgress);
+        }
+      }
+    } else {
+      this.lockToneTimer = 0;
+    }
+  }
+
+  update(physics, combatSystem, missionManager, enemySquadron, groundTargetsGroup, dt = 0.016, soundManager = null) {
     if (!physics) return;
 
     // 1. Telemetry Displays
@@ -142,6 +208,11 @@ export class HUD {
 
     // 9. Radar Minimap Blips
     this.updateRadar(physics, enemySquadron, groundTargetsGroup);
+
+    // 10. Lock-on Tone Alert
+    if (soundManager) {
+      this.updateLockTone(dt, combatSystem, soundManager);
+    }
   }
 
   updateGForceEffects(gForce) {
@@ -259,7 +330,7 @@ export class HUD {
     if (enemySquadron && enemySquadron.enemies) {
       enemySquadron.enemies.forEach((enemy) => {
         if (!enemy.isDead && enemy.mesh) {
-          addBlip(enemy.mesh.position, 'radar-blip-enemy');
+          addBlip(enemy.mesh.position, enemy.isBoss ? 'radar-blip-boss' : 'radar-blip-enemy');
         }
       });
     }
