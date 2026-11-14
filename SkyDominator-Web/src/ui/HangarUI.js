@@ -5,15 +5,17 @@ import { MISSIONS } from '../core/Missions.js';
  * Interactive 3D Hangar Bay & Customization UI Controller
  */
 export class HangarUI {
-  constructor(onSelectAircraft, onSelectSkin, onSelectMission, onLaunchMission) {
+  constructor(onSelectAircraft, onSelectSkin, onSelectMission, onSelectDifficulty, onLaunchMission) {
     this.onSelectAircraft = onSelectAircraft;
     this.onSelectSkin = onSelectSkin;
     this.onSelectMission = onSelectMission;
+    this.onSelectDifficulty = onSelectDifficulty;
     this.onLaunchMission = onLaunchMission;
 
     this.currentAircraftIndex = 0;
     this.currentMissionIndex = 0;
     this.currentSkin = 'stealth';
+    this.currentDifficulty = 'normal';
     this.isTestThrust = false;
 
     this.initDOM();
@@ -75,6 +77,18 @@ export class HangarUI {
       });
     });
 
+    // Difficulty Selector Buttons
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentDifficulty = btn.dataset.diff;
+        if (this.onSelectDifficulty) {
+          this.onSelectDifficulty(this.currentDifficulty);
+        }
+      });
+    });
+
     // Populate Mission Select Dropdown
     const missionSelect = document.getElementById('hangar-mission-select');
     if (missionSelect) {
@@ -107,7 +121,8 @@ export class HangarUI {
         this.onLaunchMission(
           AIRCRAFT_ROSTER[this.currentAircraftIndex],
           SKINS_PALETTE[this.currentSkin],
-          MISSIONS[this.currentMissionIndex]
+          MISSIONS[this.currentMissionIndex],
+          this.currentDifficulty
         );
       });
     }
@@ -167,7 +182,7 @@ export class HangarUI {
     const rewardsElem = document.getElementById('hangar-mission-rewards');
 
     if (descElem) descElem.textContent = m.description;
-    if (diffElem) diffElem.textContent = `DIFFICULTY: ${m.difficulty.toUpperCase()}`;
+    if (diffElem) diffElem.textContent = `DIFFICULTY: ${m.difficulty.toUpperCase()} | WEATHER: ${m.weather.toUpperCase()}`;
     if (rewardsElem) rewardsElem.textContent = `REWARD: +${m.rewardCredits.toLocaleString()} CR | +${m.rewardXP.toLocaleString()} XP`;
   }
 }

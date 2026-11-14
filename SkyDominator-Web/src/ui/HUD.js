@@ -48,8 +48,37 @@ export class HUD {
     this.fxBlackout = document.getElementById('fx-blackout');
     this.fxRedout = document.getElementById('fx-redout');
 
-    // Objectives Text
+    // Objectives Text & Wave Banner
     this.objectiveText = document.getElementById('hud-objective-text');
+    this.waveBanner = document.getElementById('hud-wave-banner');
+    this.radioSubtitles = document.getElementById('hud-radio-subtitles');
+
+    this.subtitleTimer = 0;
+  }
+
+  showWaveBanner(title) {
+    if (!this.waveBanner) return;
+    this.waveBanner.textContent = title;
+    this.waveBanner.classList.remove('hidden');
+    this.waveBanner.classList.add('flash');
+    setTimeout(() => {
+      if (this.waveBanner) {
+        this.waveBanner.classList.remove('flash');
+        this.waveBanner.classList.add('hidden');
+      }
+    }, 4000);
+  }
+
+  showRadioSubtitle(text) {
+    if (!this.radioSubtitles) return;
+    this.radioSubtitles.textContent = text;
+    this.radioSubtitles.classList.remove('hidden');
+    clearTimeout(this.subtitleTimer);
+    this.subtitleTimer = setTimeout(() => {
+      if (this.radioSubtitles) {
+        this.radioSubtitles.classList.add('hidden');
+      }
+    }, 4500);
   }
 
   update(physics, combatSystem, missionManager, enemySquadron, groundTargetsGroup) {
@@ -199,17 +228,15 @@ export class HUD {
     if (!this.radarBlipsContainer) return;
     this.radarBlipsContainer.innerHTML = '';
 
-    const radarRange = 6000; // 6km radius
-    const radarRadiusPx = 65; // Radius of 130px radar display
+    const radarRange = 6000;
+    const radarRadiusPx = 65;
     const playerPos = physics.position;
     const playerHeading = physics.yaw;
 
-    // Helper to project world coords to circular radar
     const addBlip = (worldPos, className) => {
       const dx = worldPos.x - playerPos.x;
       const dz = worldPos.z - playerPos.z;
 
-      // Rotate coordinates relative to player compass heading
       const cosH = Math.cos(-playerHeading);
       const sinH = Math.sin(-playerHeading);
       const rx = dx * cosH - dz * sinH;
@@ -219,7 +246,7 @@ export class HUD {
       if (dist < radarRange) {
         const factor = dist / radarRange;
         const px = (rx / dist) * factor * radarRadiusPx;
-        const py = -(rz / dist) * factor * radarRadiusPx; // radar Y is negative Z (ahead)
+        const py = -(rz / dist) * factor * radarRadiusPx;
 
         const blip = document.createElement('div');
         blip.className = className;
@@ -229,7 +256,6 @@ export class HUD {
       }
     };
 
-    // Enemy fighters (Red)
     if (enemySquadron && enemySquadron.enemies) {
       enemySquadron.enemies.forEach((enemy) => {
         if (!enemy.isDead && enemy.mesh) {
@@ -238,7 +264,6 @@ export class HUD {
       });
     }
 
-    // Ground targets (Orange)
     if (groundTargetsGroup) {
       groundTargetsGroup.children.forEach((gt) => {
         if (gt.userData && gt.userData.isAlive) {
@@ -247,7 +272,6 @@ export class HUD {
       });
     }
 
-    // Airbase / Safe zone at origin (Cyan)
     addBlip(new THREE.Vector3(0, 0, 0), 'radar-blip-base');
   }
 

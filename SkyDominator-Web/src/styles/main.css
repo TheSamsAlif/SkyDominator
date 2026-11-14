@@ -416,6 +416,34 @@ body, html {
   color: #03080e;
 }
 
+/* Difficulty Selector */
+.diff-selector-row {
+  margin: 10px 0;
+}
+
+.diff-pills {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-btn {
+  background: rgba(7, 15, 25, 0.8);
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  padding: 5px 12px;
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.diff-btn.active, .diff-btn:hover {
+  background: var(--orange-accent);
+  color: #fff;
+  border-color: var(--orange-accent);
+}
+
 /* Mission Select Dropdown */
 .mission-selector-box {
   background: rgba(2, 6, 12, 0.6);
@@ -447,6 +475,7 @@ body, html {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
+  margin-top: 8px;
 }
 
 .diff-tag {
@@ -624,6 +653,54 @@ body, html {
   font-weight: 700;
   color: var(--orange-accent);
   letter-spacing: 1.5px;
+}
+
+/* Wave Flash Banner */
+.hud-wave-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-hud);
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--orange-accent);
+  text-shadow: 0 0 20px var(--orange-accent);
+  background: rgba(4, 10, 18, 0.85);
+  border: 1.5px solid var(--orange-accent);
+  padding: 12px 36px;
+  border-radius: 4px;
+  z-index: 35;
+  transition: opacity 0.4s ease;
+}
+
+.hud-wave-banner.flash {
+  animation: pulseGlow 1.2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% { transform: translateX(-50%) scale(0.98); opacity: 0.85; }
+  100% { transform: translateX(-50%) scale(1.04); opacity: 1.0; box-shadow: 0 0 35px var(--orange-accent); }
+}
+
+/* Radio Subtitles */
+.hud-radio-subtitles {
+  position: absolute;
+  top: 75px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(4, 10, 18, 0.85);
+  border-left: 3px solid var(--green-ok);
+  padding: 8px 24px;
+  color: var(--green-ok);
+  font-family: var(--font-hud);
+  font-size: 0.85rem;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 8px rgba(0, 230, 118, 0.6);
+  border-radius: 2px;
+  z-index: 32;
+  white-space: nowrap;
 }
 
 /* Center Pitch Ladder & Horizon */

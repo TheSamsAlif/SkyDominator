@@ -1,5 +1,5 @@
 /**
- * Mission Objectives, Scoring & Progression System
+ * Mission Objectives, 3-Wave Progression, Scoring & Rewards
  */
 export class MissionManager {
   constructor(missionConfig = null) {
@@ -7,35 +7,58 @@ export class MissionManager {
     this.isVictory = false;
     this.isDefeat = false;
 
+    this.currentWaveIndex = 0;
+    this.totalWaves = 3;
+
     this.airKills = 0;
     this.groundKills = 0;
-    this.targetAirKills = missionConfig?.targetAirKills || 6;
-    this.targetGroundKills = missionConfig?.targetGroundKills || 4;
+    this.targetAirKills = 10;
+    this.targetGroundKills = 4;
 
     this.score = 0;
     this.xpAwarded = 0;
     this.creditsAwarded = 0;
 
     this.startTime = performance.now();
-    this.elapsedSeconds = 0;
+    this.waveTitle = 'WAVE 1 // VANGUARD';
+
+    if (missionConfig) {
+      this.setMission(missionConfig);
+    }
   }
 
   setMission(missionConfig) {
     this.config = missionConfig;
     this.isVictory = false;
     this.isDefeat = false;
+    this.currentWaveIndex = 0;
+    this.totalWaves = missionConfig.waves ? missionConfig.waves.length : 3;
+
     this.airKills = 0;
     this.groundKills = 0;
-    this.targetAirKills = missionConfig.targetAirKills || 6;
-    this.targetGroundKills = missionConfig.targetGroundKills || (missionConfig.groundTargets ? missionConfig.groundTargets.length : 0);
+    this.targetAirKills = missionConfig.targetAirKills || 10;
+    this.targetGroundKills = missionConfig.targetGroundKills || (missionConfig.groundTargets ? missionConfig.groundTargets.length : 4);
+
     this.score = 0;
     this.startTime = performance.now();
+    this.updateWaveTitle();
+  }
+
+  getCurrentWaveConfig() {
+    if (this.config && this.config.waves && this.config.waves[this.currentWaveIndex]) {
+      return this.config.waves[this.currentWaveIndex];
+    }
+    return { wave: this.currentWaveIndex + 1, enemies: 4, boss: this.currentWaveIndex === 2 };
+  }
+
+  updateWaveTitle() {
+    const wave = this.getCurrentWaveConfig();
+    this.waveTitle = wave.title || `WAVE ${this.currentWaveIndex + 1} OF ${this.totalWaves}`;
   }
 
   recordAirKill(isBoss = false) {
     this.airKills++;
-    this.score += isBoss ? 4500 : 1200;
-    this.checkCompletion();
+    this.score += isBoss ? 5000 : 1200;
   }
 
   recordGroundKill(points = 1500) {
@@ -44,24 +67,42 @@ export class MissionManager {
     this.checkCompletion();
   }
 
+  checkWaveAdvance(aliveEnemyCount, onAdvanceWave) {
+    if (aliveEnemyCount === 0 && !this.isVictory && !this.isDefeat) {
+      if (this.currentWaveIndex < this.totalWaves - 1) {
+        this.currentWaveIndex++;
+        this.updateWaveTitle();
+        if (onAdvanceWave) {
+          onAdvanceWave(this.getCurrentWaveConfig());
+        }
+      } else {
+        this.checkCompletion();
+      }
+    }
+  }
+
   setDefeat() {
     this.isDefeat = true;
-    this.xpAwarded = 250;
-    this.creditsAwarded = 500;
+    this.xpAwarded = 350;
+    this.creditsAwarded = 800;
   }
 
   checkCompletion() {
-    if (this.airKills >= this.targetAirKills && this.groundKills >= this.targetGroundKills) {
+    const allWavesDone = (this.currentWaveIndex >= this.totalWaves - 1);
+    const groundDone = (this.groundKills >= this.targetGroundKills);
+
+    if (allWavesDone && groundDone) {
       this.isVictory = true;
-      this.xpAwarded = this.config?.rewardXP || 1500;
-      this.creditsAwarded = this.config?.rewardCredits || 4000;
+      this.xpAwarded = this.config?.rewardXP || 1800;
+      this.creditsAwarded = this.config?.rewardCredits || 5000;
     }
   }
 
   getObjectiveText() {
-    const air = `FIGHTERS: ${this.airKills}/${this.targetAirKills}`;
-    const gnd = `SAM/RADAR: ${this.groundKills}/${this.targetGroundKills}`;
-    return `${air} | ${gnd}`;
+    const waveStr = `WAVE ${this.currentWaveIndex + 1}/${this.totalWaves}`;
+    const airStr = `AIR: ${this.airKills}/${this.targetAirKills}`;
+    const gndStr = `SAM/RADAR: ${this.groundKills}/${this.targetGroundKills}`;
+    return `${waveStr} | ${airStr} | ${gndStr}`;
   }
 
   getFormattedTime() {

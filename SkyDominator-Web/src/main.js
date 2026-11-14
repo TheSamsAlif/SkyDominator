@@ -26,17 +26,18 @@ class SkyDominatorApp {
     this.canvas = document.getElementById('game-canvas');
     this.gameState = 'HANGAR'; // 'HANGAR' | 'COMBAT' | 'DEBRIEF'
 
-    // Selected Loadout
+    // Selected Configuration
     this.selectedAircraftSpec = AIRCRAFT_ROSTER[0];
     this.selectedSkin = SKINS_PALETTE.stealth;
     this.selectedMission = MISSIONS[0];
+    this.selectedDifficulty = 'normal';
 
     // Core Systems
     this.soundManager = new SoundManager();
     this.inputManager = new InputManager();
     this.missionManager = new MissionManager(this.selectedMission);
 
-    // Camera Trauma (Screen Shake)
+    // Camera Trauma
     this.trauma = 0;
 
     // Hangar Camera Orbit State
@@ -48,6 +49,10 @@ class SkyDominatorApp {
       lastMouseX: 0,
       lastMouseY: 0
     };
+
+    this.sunLight = null;
+    this.ambLight = null;
+    this.hasRearmedThisLanding = false;
 
     this.initThree();
     this.initGameSystems();
@@ -74,7 +79,7 @@ class SkyDominatorApp {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.5, 30000);
 
-    // PBR Ambient Reflection Environment
+    // PBR Environment
     const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     pmremGenerator.compileEquirectangularShader();
     this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture;
@@ -86,9 +91,9 @@ class SkyDominatorApp {
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.65, // strength
-      0.4,  // radius
-      0.85  // threshold
+      0.65,
+      0.4,
+      0.85
     );
     this.composer.addPass(this.bloomPass);
 
@@ -101,22 +106,15 @@ class SkyDominatorApp {
   }
 
   initGameSystems() {
-    // 1. Environment & Particles
     this.environment = new EnvironmentGenerator(this.scene);
     this.particles = new ParticleSystem(this.scene);
     this.combatSystem = new CombatSystem(this.scene, this.particles, this.soundManager);
     this.enemySquadron = new EnemySquadronManager(this.scene, this.particles, this.soundManager);
 
-    // 2. Build Initial Aircraft Model
     this.rebuildAircraftModel();
-
-    // 3. Flight Physics
     this.physics = new FlightPhysics(this.aircraftMesh, this.camera);
-
-    // 4. HUD
     this.hud = new HUD(this.camera);
 
-    // 5. Setup Hangar Controls
     this.setupHangarControls();
   }
 
@@ -173,7 +171,6 @@ class SkyDominatorApp {
   }
 
   initUI() {
-    // 1. Audio Engage Modal
     const audioOverlay = document.getElementById('audio-prompt-overlay');
     const btnInitAudio = document.getElementById('btn-init-audio');
     const hangarOverlay = document.getElementById('hangar-overlay');
@@ -187,7 +184,6 @@ class SkyDominatorApp {
       });
     }
 
-    // 2. Hangar UI Controller
     this.hangarUI = new HangarUI(
       (spec, skin) => {
         this.selectedAircraftSpec = spec;
@@ -204,15 +200,19 @@ class SkyDominatorApp {
         this.selectedMission = mission;
         this.missionManager.setMission(mission);
       },
-      (spec, skin, mission) => {
+      (diff) => {
+        this.selectedDifficulty = diff;
+        this.enemySquadron.setDifficulty(diff);
+      },
+      (spec, skin, mission, diff) => {
         this.selectedAircraftSpec = spec;
         this.selectedSkin = skin;
         this.selectedMission = mission;
+        this.selectedDifficulty = diff;
         this.launchCombatMission();
       }
     );
 
-    // 3. Debrief Buttons
     const btnReturnHangar = document.getElementById('btn-return-hangar');
     const btnReplay = document.getElementById('btn-replay-mission');
 
@@ -240,11 +240,10 @@ class SkyDominatorApp {
     this.enemySquadron.clear();
     this.rebuildAircraftModel();
 
-    // Hangar lighting & environment
     this.scene.background = new THREE.Color(0x040810);
     this.scene.fog = new THREE.FogExp2(0x060c18, 0.0003);
 
-    this.environment.generateEnvironment({ citySpread: 2000, groundTargets: [] });
+    this.environment.generateEnvironment({ citySpread: 2000, groundTargets: [], weather: 'clear' });
     this.aircraftMesh.position.set(0, 5, 0);
     this.aircraftMesh.quaternion.set(0, 0, 0, 1);
   }
@@ -260,37 +259,45 @@ class SkyDominatorApp {
       missionNameEl.textContent = `OPERATION: ${this.selectedMission.name.toUpperCase()} [${this.selectedMission.city.toUpperCase()}]`;
     }
 
-    // Set Mission Environment Atmosphere
+    // Atmosphere
     this.scene.background = new THREE.Color(this.selectedMission.skyColor);
     this.scene.fog = new THREE.FogExp2(this.selectedMission.fogColor, this.selectedMission.fogDensity);
 
     // Directional Sunlight
-    const sunLight = new THREE.DirectionalLight(this.selectedMission.sunColor, 2.2);
-    sunLight.position.set(...this.selectedMission.sunPosition);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
-    this.scene.add(sunLight);
+    if (this.sunLight) this.scene.remove(this.sunLight);
+    this.sunLight = new THREE.DirectionalLight(this.selectedMission.sunColor, 2.2);
+    this.sunLight.position.set(...this.selectedMission.sunPosition);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.scene.add(this.sunLight);
 
-    const ambLight = new THREE.AmbientLight(this.selectedMission.ambientColor, 1.4);
-    this.scene.add(ambLight);
+    if (this.ambLight) this.scene.remove(this.ambLight);
+    this.ambLight = new THREE.AmbientLight(this.selectedMission.ambientColor, 1.4);
+    this.scene.add(this.ambLight);
 
-    // Generate City & Ground Targets
+    // Generate City, Weather & Ground Targets
     this.environment.generateEnvironment(this.selectedMission);
 
-    // Initialize Mission Manager
+    // Reset Systems
     this.missionManager.setMission(this.selectedMission);
-
-    // Rearm Combat System
+    this.enemySquadron.setDifficulty(this.selectedDifficulty);
     this.combatSystem.rearmAll();
-
-    // Rebuild player aircraft for combat
     this.rebuildAircraftModel();
 
     // Reset player position airborne over runway
     this.physics.resetPosition(0, 450, -400, 0);
 
-    // Spawn Hostile Squadron
-    this.enemySquadron.spawnMissionSquadron(this.selectedMission, this.physics.position);
+    // Spawn Wave 1
+    const firstWave = this.missionManager.getCurrentWaveConfig();
+    this.enemySquadron.spawnWave(firstWave, this.physics.position);
+    this.hud.showWaveBanner(firstWave.title || 'WAVE 1 // VANGUARD');
+
+    // Initial AWACS Radio Greeting
+    this.soundManager.speakRadioChatter(
+      `Viper-1, radar contact positive over ${this.selectedMission.city}. Eliminate hostile targets!`,
+      'AWACS',
+      (sub) => this.hud.showRadioSubtitle(sub)
+    );
   }
 
   addTrauma(amount) {
@@ -301,10 +308,10 @@ class SkyDominatorApp {
     requestAnimationFrame(this.animate);
 
     const dt = Math.min(this.clock.getDelta(), 0.1);
-    this.environment.update(dt);
 
     if (this.gameState === 'HANGAR') {
-      // Automatic gentle camera orbit when not dragging
+      this.environment.update(dt);
+
       if (!this.hangarOrbit.isDragging) {
         this.hangarOrbit.angle += dt * 0.25;
       }
@@ -315,7 +322,6 @@ class SkyDominatorApp {
       this.camera.lookAt(0, 5 + 1.5, 0);
       this.camera.up.set(0, 1, 0);
 
-      // Test thrust afterburner preview
       AircraftModelGenerator.updateAfterburnerFX(
         this.aircraftMesh,
         this.hangarUI.isTestThrust ? 1.0 : 0.0,
@@ -327,16 +333,19 @@ class SkyDominatorApp {
       }
 
     } else if (this.gameState === 'COMBAT') {
-      // 1. Process Unified Inputs
+      // 1. Process Inputs
       this.inputManager.update();
       if (this.inputManager.cycleCamera) {
         this.physics.cycleCamera();
       }
 
-      // 2. Aerodynamic 6-DOF Flight Physics
+      // 2. Flight Physics
       this.physics.update(dt, this.inputManager);
 
-      // 3. Engine Audio & Visual Afterburners
+      // 3. Dynamic Weather (Rain follows player, lightning)
+      this.environment.update(dt, this.physics.position);
+
+      // 4. Audio & Afterburners
       AircraftModelGenerator.updateAfterburnerFX(
         this.aircraftMesh,
         this.physics.throttle,
@@ -354,7 +363,7 @@ class SkyDominatorApp {
         }
       }
 
-      // 4. Weapons & Combat Handling
+      // 5. Weapons & Combat
       this.combatSystem.update(
         dt,
         this.aircraftMesh,
@@ -371,16 +380,26 @@ class SkyDominatorApp {
         }
       );
 
-      // 5. Safe-Zone Airbase Detection (Auto-Repair & Rearm)
+      // 6. Safe-Zone Airbase Detection
       const distFromBase = new THREE.Vector2(this.physics.position.x, this.physics.position.z).length();
       const inSafeZone = distFromBase < 1400;
       this.enemySquadron.playerSafe = inSafeZone;
 
       if (inSafeZone && this.physics.altitudeMeters < 50) {
-        this.combatSystem.rearmAll();
+        if (!this.hasRearmedThisLanding) {
+          this.combatSystem.rearmAll();
+          this.hasRearmedThisLanding = true;
+          this.soundManager.speakRadioChatter(
+            'Airbase approach confirmed. Armor repaired, payload rearmed!',
+            'BASE TOWER',
+            (sub) => this.hud.showRadioSubtitle(sub)
+          );
+        }
+      } else {
+        this.hasRearmedThisLanding = false;
       }
 
-      // 6. Enemy Squadron AI Update
+      // 7. Enemy AI Update
       this.enemySquadron.update(
         dt,
         this.physics.position,
@@ -392,12 +411,20 @@ class SkyDominatorApp {
 
           if (isDead) {
             this.missionManager.setDefeat();
+            this.soundManager.speakRadioChatter('Mayday! Viper-1 is going down!', 'AWACS');
             this.showDebriefModal();
           }
         }
       );
 
-      // 7. Check Ground Target Destruction
+      // 8. 3-Wave Auto-Progression Check
+      this.missionManager.checkWaveAdvance(this.enemySquadron.getAliveCount(), (newWave) => {
+        this.enemySquadron.spawnWave(newWave, this.physics.position);
+        this.hud.showWaveBanner(newWave.title);
+        this.addTrauma(0.35);
+      });
+
+      // 9. Ground Target Destruction
       if (this.environment.groundTargetsGroup) {
         this.environment.groundTargetsGroup.children.forEach((gt) => {
           if (gt.userData && gt.userData.isAlive && gt.userData.health <= 0) {
@@ -405,11 +432,16 @@ class SkyDominatorApp {
             this.particles.spawnExplosion(gt.position, 3.5);
             this.missionManager.recordGroundKill(1500);
             this.addTrauma(0.3);
+            this.soundManager.speakRadioChatter(
+              `Ground defense ${gt.userData.name} neutralized!`,
+              'AWACS',
+              (sub) => this.hud.showRadioSubtitle(sub)
+            );
           }
         });
       }
 
-      // 8. Update VFX Particles
+      // 10. Update VFX Particles
       this.particles.update(dt, this.enemySquadron, (enemy, dmg) => {
         const destroyed = this.enemySquadron.damageEnemy(enemy, dmg);
         if (destroyed) {
@@ -418,7 +450,7 @@ class SkyDominatorApp {
         }
       });
 
-      // 9. Update HUD
+      // 11. Update HUD
       this.hud.update(
         this.physics,
         this.combatSystem,
@@ -427,7 +459,7 @@ class SkyDominatorApp {
         this.environment.groundTargetsGroup
       );
 
-      // 10. Camera Trauma / Screen Shake
+      // 12. Camera Trauma / Screen Shake
       if (this.trauma > 0) {
         const shake = this.trauma * this.trauma;
         this.camera.position.x += (Math.random() - 0.5) * shake * 1.5;
@@ -436,8 +468,13 @@ class SkyDominatorApp {
         this.trauma = Math.max(0, this.trauma - dt * 0.85);
       }
 
-      // 11. Check Victory Condition
+      // 13. Victory Condition
       if (this.missionManager.isVictory) {
+        this.soundManager.speakRadioChatter(
+          'Airspace cleared! Outstanding job Viper-1, mission accomplished!',
+          'AWACS',
+          (sub) => this.hud.showRadioSubtitle(sub)
+        );
         this.showDebriefModal();
       }
     }
