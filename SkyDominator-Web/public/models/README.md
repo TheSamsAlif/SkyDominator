@@ -10,3 +10,4 @@ Place your custom 3D aircraft models (.glb or .gltf) in this directory:
 - Orientation: Forward nose pointing along the **+Z axis** (or normalized automatically by AircraftModelGenerator).
 - Center: Centered pivot at the aircraft's center of mass.
 - If no `.glb` file is found in this directory, the game automatically falls back to the high-detail procedural stealth jet from `RealisticJet.js`.
+

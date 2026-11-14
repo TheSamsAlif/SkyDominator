@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Combat & Weapons System (Rotary Cannon, Guided Missiles, Air-to-Ground Bombs, Flares, Radar Lock)
+ * Combat & Weapons System (Rotary Cannon, Guided Missiles, AGM Bombs, Countermeasures)
  */
 export class CombatSystem {
   constructor(scene, particleSystem, soundManager) {
@@ -9,95 +9,112 @@ export class CombatSystem {
     this.particles = particleSystem;
     this.audio = soundManager;
 
-    this.missilesInFlight = [];
-    this.bombsInFlight = [];
+    // Player Vitals
+    this.playerHealth = 100;
+    this.playerShield = 100;
+    this.maxHealth = 100;
+    this.maxShield = 100;
 
-    this.missileAmmo = 8;
-    this.maxMissiles = 8;
-    this.bombAmmo = 4;
-    this.maxBombs = 4;
-    this.flareAmmo = 12;
-    this.maxFlares = 12;
-
+    // Cannon (Vulcan 20mm)
     this.cannonCooldown = 0;
     this.cannonRate = 0.08;
 
+    // Missiles (Air-to-Air Homing)
+    this.missiles = [];
+    this.missileAmmo = 8;
+    this.maxMissiles = 8;
     this.missileCooldown = 0;
+
+    // Bombs (Air-to-Ground Precision Strike)
+    this.bombs = [];
+    this.bombAmmo = 4;
+    this.maxBombs = 4;
     this.bombCooldown = 0;
+
+    // Flares
+    this.flareAmmo = 12;
+    this.maxFlares = 12;
     this.flareCooldown = 0;
 
-    // Lock-on Tracking (Air)
+    // Lock-on Tracking
     this.currentTarget = null;
-    this.lockProgress = 0;
+    this.lockProgress = 0.0;
     this.isLocked = false;
     this.lockBeepTimer = 0;
 
-    // Weapon Materials
+    // Shared materials
     this.missileMat = new THREE.MeshStandardMaterial({
-      color: 0xeeeeee,
+      color: 0xffffff,
       metalness: 0.8,
-      roughness: 0.2
+      roughness: 0.25
     });
 
     this.bombMat = new THREE.MeshStandardMaterial({
-      color: 0x3d4438, // Olive drab military bomb
-      metalness: 0.6,
-      roughness: 0.5
+      color: 0x3d4a3c,
+      metalness: 0.4,
+      roughness: 0.6
     });
   }
 
-  update(dt, playerMesh, playerVel, input, enemySquadron, onEnemyHit, groundTargets = [], onGroundHit = null) {
-    // 1. Cannon Firing
+  update(dt, playerMesh, playerVel, input, enemySquadron, groundTargetsGroup, onEnemyHit) {
+    if (!playerMesh) return;
+
+    // Forward direction from player orientation (Nose = +Z)
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(playerMesh.quaternion);
+
+    // 1. Cannon Firing (LMB / Space)
     this.cannonCooldown = Math.max(0, this.cannonCooldown - dt);
     if (input.fireCannon && this.cannonCooldown <= 0) {
       this.cannonCooldown = this.cannonRate;
 
-      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(playerMesh.quaternion);
-      const gunL = playerMesh.position.clone().add(forward.clone().multiplyScalar(5)).add(right.clone().multiplyScalar(1.2));
-      const gunR = playerMesh.position.clone().add(forward.clone().multiplyScalar(5)).add(right.clone().multiplyScalar(-1.2));
+      const gunL = playerMesh.position.clone().add(forward.clone().multiplyScalar(4)).add(right.clone().multiplyScalar(1.2));
+      const gunR = playerMesh.position.clone().add(forward.clone().multiplyScalar(4)).add(right.clone().multiplyScalar(-1.2));
 
       this.particles.spawnBullet(gunL, forward, playerVel);
       this.particles.spawnBullet(gunR, forward, playerVel);
-      this.audio.playCannonFire();
+
+      if (this.audio) this.audio.playCannonFire();
     }
 
-    // 2. Lock-on Scanning Cone (Air)
+    // 2. Lock-on Tracking Cone
     this.updateTargetTracking(dt, playerMesh, enemySquadron);
 
-    // 3. Air-to-Air Missile Launch
+    // 3. Air-to-Air Missile Launch (R / M)
     this.missileCooldown = Math.max(0, this.missileCooldown - dt);
     if (input.fireMissile && this.missileCooldown <= 0 && this.missileAmmo > 0) {
-      this.missileCooldown = 1.0;
+      this.missileCooldown = 0.9;
       this.missileAmmo--;
-      this.launchMissile(playerMesh, playerVel, this.currentTarget);
-      this.audio.playMissileLaunch();
+      this.launchMissile(playerMesh, playerVel, forward, this.currentTarget);
+      if (this.audio) this.audio.playMissileLaunch();
     }
 
-    // 4. Air-to-Ground Heavy Bomb Drop [Key: B]
+    // 4. Air-to-Ground Bomb / AGM (Key B)
     this.bombCooldown = Math.max(0, this.bombCooldown - dt);
     if (input.fireBomb && this.bombCooldown <= 0 && this.bombAmmo > 0) {
       this.bombCooldown = 1.4;
       this.bombAmmo--;
-      this.dropBomb(playerMesh, playerVel, groundTargets);
-      this.audio.playMissileLaunch();
+      this.launchBomb(playerMesh, playerVel, forward);
+      if (this.audio) this.audio.playCannonFire();
     }
 
-    // 5. Flare Deployment
+    // 5. Flare Countermeasures (C / F)
     this.flareCooldown = Math.max(0, this.flareCooldown - dt);
     if (input.deployFlare && this.flareCooldown <= 0 && this.flareAmmo > 0) {
-      this.flareCooldown = 1.5;
-      this.flareAmmo--;
+      this.flareCooldown = 1.2;
+      this.flareAmmo -= 2;
       this.particles.spawnFlare(playerMesh.position, playerVel);
     }
 
-    // 6. Update Ordnance in Flight
+    // 6. Update Guided Missiles
     this.updateMissiles(dt, onEnemyHit);
-    this.updateBombs(dt, groundTargets, onGroundHit);
+
+    // 7. Update Bombs
+    this.updateBombs(dt, groundTargetsGroup);
   }
 
   updateTargetTracking(dt, playerMesh, enemySquadron) {
-    if (!enemySquadron || enemySquadron.length === 0) {
+    if (!enemySquadron || !enemySquadron.enemies || enemySquadron.enemies.length === 0) {
       this.currentTarget = null;
       this.isLocked = false;
       this.lockProgress = 0;
@@ -110,7 +127,7 @@ export class CombatSystem {
     let bestTarget = null;
     let closestDist = 8000;
 
-    for (let enemy of enemySquadron) {
+    for (const enemy of enemySquadron.enemies) {
       if (enemy.isDead || !enemy.mesh) continue;
 
       const toEnemy = enemy.mesh.position.clone().sub(playerPos);
@@ -119,7 +136,8 @@ export class CombatSystem {
       if (dist < closestDist) {
         toEnemy.normalize();
         const angle = Math.acos(THREE.MathUtils.clamp(forward.dot(toEnemy), -1, 1));
-        if (angle < (40 * Math.PI / 180)) {
+        // Within 45-degree forward radar lock cone
+        if (angle < (45 * Math.PI / 180)) {
           bestTarget = enemy;
           closestDist = dist;
         }
@@ -128,102 +146,51 @@ export class CombatSystem {
 
     if (bestTarget) {
       this.currentTarget = bestTarget;
-      this.lockProgress = Math.min(1.0, this.lockProgress + dt * 0.9);
+      this.lockProgress = Math.min(1.0, this.lockProgress + dt * 1.2);
       this.isLocked = (this.lockProgress >= 1.0);
 
       this.lockBeepTimer += dt;
       const beepInterval = this.isLocked ? 0.12 : 0.35;
       if (this.lockBeepTimer >= beepInterval) {
         this.lockBeepTimer = 0;
-        this.audio.playLockTone(this.isLocked);
+        if (this.audio) this.audio.playLockTone(this.isLocked);
       }
     } else {
       this.currentTarget = null;
-      this.lockProgress = Math.max(0, this.lockProgress - dt * 1.5);
+      this.lockProgress = Math.max(0, this.lockProgress - dt * 2.0);
       this.isLocked = false;
     }
   }
 
-  launchMissile(playerMesh, playerVel, target) {
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
-
-    const missileGroup = new THREE.Group();
-    const bodyGeom = new THREE.CylinderGeometry(0.22, 0.22, 3.2, 8);
+  launchMissile(playerMesh, playerVel, forward, target) {
+    const group = new THREE.Group();
+    const bodyGeom = new THREE.CylinderGeometry(0.18, 0.18, 3.2, 8);
     bodyGeom.rotateX(Math.PI / 2);
     const body = new THREE.Mesh(bodyGeom, this.missileMat);
-    missileGroup.add(body);
+    group.add(body);
 
-    const noseGeom = new THREE.ConeGeometry(0.22, 0.8, 8);
-    noseGeom.rotateX(-Math.PI / 2);
+    const noseGeom = new THREE.ConeGeometry(0.18, 0.7, 8);
+    noseGeom.rotateX(Math.PI / 2);
     const nose = new THREE.Mesh(noseGeom, this.missileMat);
-    nose.position.set(0, 0, 2.0);
-    missileGroup.add(nose);
+    nose.position.set(0, 0, 1.9);
+    group.add(nose);
 
-    missileGroup.position.copy(playerMesh.position).add(forward.clone().multiplyScalar(4));
-    missileGroup.quaternion.copy(playerMesh.quaternion);
+    group.position.copy(playerMesh.position).add(forward.clone().multiplyScalar(4));
+    group.quaternion.copy(playerMesh.quaternion);
+    this.scene.add(group);
 
-    this.scene.add(missileGroup);
-
-    this.missilesInFlight.push({
-      mesh: missileGroup,
-      velocity: forward.clone().multiplyScalar(350).add(playerVel),
+    this.missiles.push({
+      mesh: group,
+      velocity: forward.clone().multiplyScalar(320).add(playerVel),
       target: target,
-      life: 7.0,
-      turnRate: 4.5
-    });
-  }
-
-  dropBomb(playerMesh, playerVel, groundTargets = []) {
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(playerMesh.quaternion);
-
-    // Find nearest ground target in front of jet
-    let groundTarget = null;
-    let minDist = 6000;
-    for (let gt of groundTargets) {
-      if (!gt.isDead) {
-        const d = playerMesh.position.distanceTo(gt.position);
-        if (d < minDist) {
-          minDist = d;
-          groundTarget = gt;
-        }
-      }
-    }
-
-    // Heavy Bomb 3D model
-    const bombGroup = new THREE.Group();
-    const bodyGeom = new THREE.CylinderGeometry(0.45, 0.55, 4.2, 10);
-    bodyGeom.rotateX(Math.PI / 2);
-    const body = new THREE.Mesh(bodyGeom, this.bombMat);
-    bombGroup.add(body);
-
-    const noseGeom = new THREE.SphereGeometry(0.55, 10, 8);
-    const nose = new THREE.Mesh(noseGeom, this.bombMat);
-    nose.position.set(0, 0, 2.1);
-    bombGroup.add(nose);
-
-    // Tail guidance fins
-    for (let k = 0; k < 4; k++) {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 1.2), this.bombMat);
-      fin.rotation.z = (k * Math.PI) / 2;
-      fin.position.set(0, 0, -1.8);
-      bombGroup.add(fin);
-    }
-
-    bombGroup.position.copy(playerMesh.position).add(new THREE.Vector3(0, -2, 0));
-    bombGroup.quaternion.copy(playerMesh.quaternion);
-    this.scene.add(bombGroup);
-
-    this.bombsInFlight.push({
-      mesh: bombGroup,
-      velocity: forward.clone().multiplyScalar(160).add(playerVel.clone().multiplyScalar(0.7)),
-      target: groundTarget,
-      life: 10.0
+      life: 8.0,
+      turnRate: 3.8
     });
   }
 
   updateMissiles(dt, onEnemyHit) {
-    for (let i = this.missilesInFlight.length - 1; i >= 0; i--) {
-      const m = this.missilesInFlight[i];
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      const m = this.missiles[i];
       m.life -= dt;
 
       if (m.target && !m.target.isDead && m.target.mesh) {
@@ -231,19 +198,18 @@ export class CombatSystem {
         const currentDir = m.velocity.clone().normalize();
 
         currentDir.lerp(toTarget, m.turnRate * dt).normalize();
-        const speed = 750;
-        m.velocity.copy(currentDir.multiplyScalar(speed));
-
+        m.velocity.copy(currentDir.multiplyScalar(780)); // Mach 2+
         m.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), currentDir);
 
+        // Hit Check
         const dist = m.mesh.position.distanceTo(m.target.mesh.position);
-        if (dist < 18.0) {
-          this.particles.spawnExplosion(m.mesh.position, 1.8);
-          this.audio.playExplosion(true);
+        if (dist < 20.0) {
+          this.particles.spawnExplosion(m.mesh.position, 2.2);
+          if (this.audio) this.audio.playExplosion(true);
           onEnemyHit(m.target, 450);
 
           this.scene.remove(m.mesh);
-          this.missilesInFlight.splice(i, 1);
+          this.missiles.splice(i, 1);
           continue;
         }
       }
@@ -251,80 +217,88 @@ export class CombatSystem {
       m.mesh.position.addScaledVector(m.velocity, dt);
       this.particles.spawnMissileSmoke(m.mesh.position);
 
-      if (m.life <= 0) {
-        this.particles.spawnExplosion(m.mesh.position, 0.8);
+      if (m.life <= 0 || m.mesh.position.y <= 0) {
+        this.particles.spawnExplosion(m.mesh.position, 1.2);
         this.scene.remove(m.mesh);
-        this.missilesInFlight.splice(i, 1);
+        this.missiles.splice(i, 1);
       }
     }
   }
 
-  updateBombs(dt, groundTargets = [], onGroundHit = null) {
-    for (let i = this.bombsInFlight.length - 1; i >= 0; i--) {
-      const b = this.bombsInFlight[i];
+  launchBomb(playerMesh, playerVel, forward) {
+    const geom = new THREE.CylinderGeometry(0.35, 0.5, 3.8, 8);
+    geom.rotateX(Math.PI / 2);
+    const mesh = new THREE.Mesh(geom, this.bombMat);
+
+    mesh.position.copy(playerMesh.position).add(new THREE.Vector3(0, -1.5, 0));
+    mesh.quaternion.copy(playerMesh.quaternion);
+
+    // Initial velocity: forward momentum minus vertical drop
+    const vel = forward.clone().multiplyScalar(160).add(playerVel.clone().multiplyScalar(0.5));
+    vel.y -= 15;
+
+    this.scene.add(mesh);
+    this.bombs.push({
+      mesh,
+      velocity: vel,
+      life: 12.0,
+      damage: 600,
+      blastRadius: 95
+    });
+  }
+
+  updateBombs(dt, groundTargetsGroup) {
+    for (let i = this.bombs.length - 1; i >= 0; i--) {
+      const b = this.bombs[i];
       b.life -= dt;
 
-      // Gravity acceleration downward
-      b.velocity.y -= 9.8 * 8.0 * dt;
-
-      // If tracking a ground target, apply aerodynamic glide steer
-      if (b.target && !b.target.isDead) {
-        const toTgt = b.target.position.clone().sub(b.mesh.position).normalize();
-        b.velocity.lerp(toTgt.multiplyScalar(b.velocity.length()), dt * 1.8);
-      }
-
+      // Ballistic gravity
+      b.velocity.y -= 95 * dt;
       b.mesh.position.addScaledVector(b.velocity, dt);
 
-      // Pitch bomb nose down towards its velocity vector
+      // Pitch bomb toward trajectory
       const dir = b.velocity.clone().normalize();
       b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
 
-      // Smoke puff
-      if (Math.random() > 0.4) {
-        this.particles.spawnMissileSmoke(b.mesh.position);
-      }
+      let detonated = b.mesh.position.y <= 3;
 
-      // Ground impact check (y <= 16 or close to ground target)
-      let detonated = false;
-      if (b.mesh.position.y <= 16) {
-        detonated = true;
-      }
-
-      if (groundTargets && onGroundHit) {
-        for (let gt of groundTargets) {
-          if (!gt.isDead && b.mesh.position.distanceTo(gt.position) < 32.0) {
-            detonated = true;
-            break;
-          }
-        }
-      }
-
-      if (detonated) {
-        // Massive bomb explosion & shockwave
-        this.particles.spawnExplosion(b.mesh.position, 3.2, true);
-        this.audio.playExplosion(true);
-
-        // Apply 500 area splash damage to nearby ground targets
-        if (groundTargets && onGroundHit) {
-          for (let gt of groundTargets) {
-            if (!gt.isDead) {
-              const d = b.mesh.position.distanceTo(gt.position);
-              if (d < 110.0) {
-                onGroundHit(gt, 500);
-              }
+      // Check damage against ground structures
+      if (groundTargetsGroup) {
+        groundTargetsGroup.children.forEach((gt) => {
+          if (gt.userData && gt.userData.isAlive) {
+            const dist = b.mesh.position.distanceTo(gt.position);
+            if (dist < b.blastRadius) {
+              gt.userData.health -= b.damage;
+              detonated = true;
             }
           }
-        }
-
-        this.scene.remove(b.mesh);
-        this.bombsInFlight.splice(i, 1);
-        continue;
+        });
       }
 
-      if (b.life <= 0) {
+      if (detonated || b.life <= 0) {
+        this.particles.spawnExplosion(b.mesh.position, 4.0);
+        if (this.audio) this.audio.playExplosion(true);
         this.scene.remove(b.mesh);
-        this.bombsInFlight.splice(i, 1);
+        this.bombs.splice(i, 1);
       }
     }
+  }
+
+  applyDamageToPlayer(damage) {
+    if (this.playerShield > 0) {
+      const absorbed = Math.min(this.playerShield, damage);
+      this.playerShield -= absorbed;
+      damage -= absorbed;
+    }
+    this.playerHealth = Math.max(0, this.playerHealth - damage);
+    return this.playerHealth <= 0;
+  }
+
+  rearmAll() {
+    this.playerHealth = this.maxHealth;
+    this.playerShield = this.maxShield;
+    this.missileAmmo = this.maxMissiles;
+    this.bombAmmo = this.maxBombs;
+    this.flareAmmo = this.maxFlares;
   }
 }

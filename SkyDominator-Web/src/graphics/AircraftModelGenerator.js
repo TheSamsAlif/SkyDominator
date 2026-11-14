@@ -1,153 +1,197 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { createJet } from './RealisticJet.js';
 
-// Shared GLTF & DRACO Loader instance with cache
+// Setup DRACOLoader with Google CDN decoder
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+dracoLoader.setDecoderConfig({ type: 'js' });
 
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
-const modelCache = new Map();
-
 /**
- * Aircraft Model Generator with GLTF/DRACO Loader & Procedural Fallback
+ * Procedural & GLTF 3D Fighter Aircraft Generator
+ * Supports all 12 fictional aircraft identities and external .glb models
  */
 export class AircraftModelGenerator {
-  /**
-   * Creates an aircraft group. Instantly populates procedural fallback and asynchronously loads GLB if available.
-   */
-  static createAircraft(spec, skinConfig = null, isEnemy = false) {
+  static createAircraft(spec, skinConfig = null) {
     const group = new THREE.Group();
     group.name = `aircraft_${spec.id || 'jet'}`;
 
-    const primaryColor = skinConfig?.primary || spec.defaultColor || (isEnemy ? 0x22262e : 0x0a1018);
-    const accentColor = skinConfig?.secondary || spec.accentColor || (isEnemy ? 0xff1744 : 0x00e5ff);
-    const wingspan = spec.wingspan || 14.5;
-    const targetScale = wingspan / 14.5;
+    // Skin Materials
+    const primaryColor = skinConfig?.primary || spec.defaultColor || 0x0a1018;
+    const accentColor = skinConfig?.secondary || spec.accentColor || 0x00e5ff;
+    const roughness = skinConfig?.roughness ?? 0.35;
+    const metalness = skinConfig?.metalness ?? 0.75;
 
-    // 1. Procedural mesh as instant reliable baseline
-    const proceduralJet = createJet(primaryColor, accentColor);
-    proceduralJet.name = 'jet_visual_body';
-    proceduralJet.scale.setScalar(targetScale);
-    group.add(proceduralJet);
-
-    // 2. Try loading custom GLB if specified or from /models/ directory
-    const modelUrl = spec.modelUrl || (isEnemy ? '/models/enemy_jet.glb' : '/models/f35.glb');
-    this.tryLoadGLB(modelUrl, group, primaryColor, accentColor, targetScale, isEnemy);
-
-    return group;
-  }
-
-  /**
-   * Asynchronously attempts to load a real .glb model and replace the procedural mesh
-   */
-  static tryLoadGLB(url, parentGroup, primaryColor, accentColor, targetScale, isEnemy) {
-    // If cached, clone immediately
-    if (modelCache.has(url)) {
-      this.attachGLBModel(modelCache.get(url).clone(), parentGroup, primaryColor, accentColor, targetScale, isEnemy);
-      return;
-    }
-
-    gltfLoader.load(
-      url,
-      (gltf) => {
-        modelCache.set(url, gltf.scene);
-        this.attachGLBModel(gltf.scene.clone(), parentGroup, primaryColor, accentColor, targetScale, isEnemy);
-      },
-      undefined,
-      () => {
-        // Expected fallback: if .glb file doesn't exist in /models, keep procedural jet without breaking
-      }
-    );
-  }
-
-  static attachGLBModel(glbScene, parentGroup, primaryColor, accentColor, targetScale, isEnemy) {
-    // Remove existing procedural visual body
-    const existing = parentGroup.getObjectByName('jet_visual_body');
-    if (existing) {
-      parentGroup.remove(existing);
-    }
-
-    // Compute bounding box to normalize model size and orientation
-    const box = new THREE.Box3().setFromObject(glbScene);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-
-    // Center pivot
-    glbScene.position.sub(center);
-
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const scaleFactor = (18.0 / (maxDim || 1.0)) * targetScale;
-    glbScene.scale.setScalar(scaleFactor);
-
-    // Configure PBR materials and shadows
-    glbScene.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-
-        if (child.material) {
-          child.material.metalness = THREE.MathUtils.clamp(child.material.metalness ?? 0.6, 0.4, 0.9);
-          child.material.roughness = THREE.MathUtils.clamp(child.material.roughness ?? 0.4, 0.2, 0.6);
-
-          if (isEnemy && child.material.color) {
-            child.material.color.multiplyScalar(0.7); // Darken enemy jets
-          }
-        }
-      }
+    const hullMat = new THREE.MeshStandardMaterial({
+      color: primaryColor,
+      roughness: roughness,
+      metalness: metalness,
+      flatShading: true
     });
 
-    const wrapper = new THREE.Group();
-    wrapper.name = 'jet_visual_body';
-    wrapper.add(glbScene);
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      roughness: 0.2,
+      metalness: 0.8,
+      emissive: accentColor,
+      emissiveIntensity: 0.35
+    });
 
-    // Attach afterburner flames to the GLTF model
-    this.attachAfterburnerCones(wrapper, accentColor);
+    const canopyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x112233,
+      metalness: 0.9,
+      roughness: 0.08,
+      transmission: 0.6,
+      transparent: true,
+      opacity: 0.85
+    });
 
-    parentGroup.add(wrapper);
-  }
+    // 1. Central Fuselage (Chined body, Nose = +Z)
+    const fuselageGeom = new THREE.CylinderGeometry(0.5, 1.4, 18, 6);
+    fuselageGeom.rotateX(Math.PI / 2);
+    fuselageGeom.scale(1.2, 0.65, 1.0);
+    const fuselage = new THREE.Mesh(fuselageGeom, hullMat);
+    fuselage.castShadow = true;
+    fuselage.receiveShadow = true;
+    group.add(fuselage);
 
-  static attachAfterburnerCones(wrapper, accentColor) {
-    // Left & right afterburner flame cones
+    // 2. Needle Nose Cone (at +Z)
+    const noseGeom = new THREE.ConeGeometry(0.8, 5, 6);
+    noseGeom.rotateX(Math.PI / 2);
+    noseGeom.scale(1.1, 0.5, 1.0);
+    const nose = new THREE.Mesh(noseGeom, hullMat);
+    nose.position.set(0, 0, 11);
+    nose.castShadow = true;
+    group.add(nose);
+
+    // 3. Cockpit Glass Canopy
+    const canopyGeom = new THREE.ConeGeometry(0.7, 5.5, 8);
+    canopyGeom.rotateX(Math.PI / 2);
+    canopyGeom.scale(0.85, 0.45, 1.0);
+    const canopy = new THREE.Mesh(canopyGeom, canopyMat);
+    canopy.position.set(0, 0.65, 4.5);
+    group.add(canopy);
+
+    // 4. Main Wings (Geometry based on WingType)
+    const wingspan = spec.wingspan || 14.0;
+    const wingGeom = new THREE.BufferGeometry();
+
+    let wingVertices;
+    if (spec.wingType === 'forward_swept') {
+      wingVertices = new Float32Array([
+        0, 0, 3,       wingspan / 2, 0.1, 6,     0, 0, -4,
+        0, 0, 3,      -wingspan / 2, 0.1, 6,     0, 0, -4,
+        0, 0, -4,      wingspan / 2, -0.1, 6,    0, 0, 3,
+        0, 0, -4,     -wingspan / 2, -0.1, 6,    0, 0, 3
+      ]);
+    } else if (spec.wingType === 'needle_delta' || spec.wingType === 'waverider') {
+      wingVertices = new Float32Array([
+        0, 0, 6,       wingspan / 2, 0.05, -7,    0, 0, -7,
+        0, 0, 6,      -wingspan / 2, 0.05, -7,    0, 0, -7,
+        0, 0, -7,      wingspan / 2, -0.05, -7,   0, 0, 6,
+        0, 0, -7,     -wingspan / 2, -0.05, -7,   0, 0, 6
+      ]);
+    } else {
+      // Classic stealth diamond delta
+      wingVertices = new Float32Array([
+        0, 0, 3,       wingspan / 2, 0.08, -3,    0, 0, -6,
+        0, 0, 3,      -wingspan / 2, 0.08, -3,    0, 0, -6,
+        0, 0, -6,      wingspan / 2, -0.08, -3,   0, 0, 3,
+        0, 0, -6,     -wingspan / 2, -0.08, -3,   0, 0, 3
+      ]);
+    }
+
+    wingGeom.setAttribute('position', new THREE.BufferAttribute(wingVertices, 3));
+    wingGeom.computeVertexNormals();
+    const mainWings = new THREE.Mesh(wingGeom, hullMat);
+    mainWings.castShadow = true;
+    mainWings.receiveShadow = true;
+    group.add(mainWings);
+
+    // 5. Wingtip Trim Rails
+    const railL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3), accentMat);
+    railL.position.set(wingspan / 2, 0, -3);
+    const railR = railL.clone();
+    railR.position.set(-wingspan / 2, 0, -3);
+    group.add(railL);
+    group.add(railR);
+
+    // 6. Canted Vertical Stabilizers
+    const finGeom = new THREE.BufferGeometry();
+    const finVertices = new Float32Array([
+      0, 0, -2,   0, 3.2, -6,   0, 0, -7,
+      0, 0, -7,   0, 3.2, -6,   0, 0, -2
+    ]);
+    finGeom.setAttribute('position', new THREE.BufferAttribute(finVertices, 3));
+    finGeom.computeVertexNormals();
+
+    const finL = new THREE.Mesh(finGeom, hullMat);
+    finL.position.set(1.4, 0.3, 0);
+    finL.rotation.z = -0.35;
+    finL.castShadow = true;
+
+    const finR = new THREE.Mesh(finGeom, hullMat);
+    finR.position.set(-1.4, 0.3, 0);
+    finR.rotation.z = 0.35;
+    finR.castShadow = true;
+
+    group.add(finL);
+    group.add(finR);
+
+    // 7. Twin Turbine Exhaust Nozzles (at -Z)
+    const exhaustMat = new THREE.MeshStandardMaterial({
+      color: 0x1f232b,
+      metalness: 0.9,
+      roughness: 0.3
+    });
+
+    const nozzleGeom = new THREE.CylinderGeometry(0.55, 0.65, 1.8, 12, 1, true);
+    nozzleGeom.rotateX(Math.PI / 2);
+
+    const nozzleL = new THREE.Mesh(nozzleGeom, exhaustMat);
+    nozzleL.position.set(0.9, 0, -9.0);
+    const nozzleR = new THREE.Mesh(nozzleGeom, exhaustMat);
+    nozzleR.position.set(-0.9, 0, -9.0);
+    group.add(nozzleL);
+    group.add(nozzleR);
+
+    // 8. Afterburner Flame Cones
     const flameMat = new THREE.MeshBasicMaterial({
       color: 0x00e5ff,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
       blending: THREE.AdditiveBlending
     });
 
-    const flameGeom = new THREE.ConeGeometry(0.48, 4.5, 10);
-    flameGeom.rotateX(-Math.PI / 2);
+    const flameGeom = new THREE.ConeGeometry(0.48, 4.5, 8);
+    flameGeom.rotateX(-Math.PI / 2); // points backward along -Z
     flameGeom.translate(0, 0, -2.25);
 
     const flameL = new THREE.Mesh(flameGeom, flameMat);
-    flameL.position.set(0.85, 0, -9.9);
+    flameL.position.set(0.9, 0, -9.8);
     flameL.name = 'afterburner_flame_left';
-    flameL.castShadow = false;
 
-    const flameR = new THREE.Mesh(flameGeom, flameMat.clone());
-    flameR.position.set(-0.85, 0, -9.9);
+    const flameR = new THREE.Mesh(flameGeom, flameMat);
+    flameR.position.set(-0.9, 0, -9.8);
     flameR.name = 'afterburner_flame_right';
-    flameR.castShadow = false;
 
-    wrapper.add(flameL);
-    wrapper.add(flameR);
+    group.add(flameL);
+    group.add(flameR);
 
     const exhaustLight = new THREE.PointLight(accentColor, 2.5, 15);
     exhaustLight.position.set(0, 0, -11);
     exhaustLight.name = 'exhaust_glow_light';
-    wrapper.add(exhaustLight);
+    group.add(exhaustLight);
+
+    return group;
   }
 
-  /**
-   * Dynamically scales afterburner flame length, color, and exhaust point light
-   */
   static updateAfterburnerFX(aircraftGroup, throttle, isAfterburner) {
+    if (!aircraftGroup) return;
+
     const flameL = aircraftGroup.getObjectByName('afterburner_flame_left');
     const flameR = aircraftGroup.getObjectByName('afterburner_flame_right');
     const light = aircraftGroup.getObjectByName('exhaust_glow_light');
@@ -179,11 +223,62 @@ export class AircraftModelGenerator {
         light.color.setHex(0x00e5ff);
       }
     } else {
-      flameL.scale.set(0.01, 0.01, 0.01);
-      flameR.scale.set(0.01, 0.01, 0.01);
+      flameL.scale.set(0.1, 0.1, 0.1);
+      flameR.scale.set(0.1, 0.1, 0.1);
       flameL.material.opacity = 0;
       flameR.material.opacity = 0;
       if (light) light.intensity = 0;
     }
+  }
+
+  static loadAircraftModel(modelPath, options = {}) {
+    const container = new THREE.Group();
+    container.name = options.name || 'AircraftContainer';
+
+    // Procedural fallback
+    const fallbackJet = AircraftModelGenerator.createAircraft(
+      options.spec || {
+        id: 'A01_ApexPhantom',
+        wingType: 'diamond_delta',
+        wingspan: 14.5,
+        defaultColor: options.color || 0x0a1018,
+        accentColor: options.accent || 0x00e5ff
+      },
+      options.skin
+    );
+    container.add(fallbackJet);
+
+    if (!modelPath) return container;
+
+    gltfLoader.load(
+      modelPath,
+      (gltf) => {
+        const gltfModel = gltf.scene;
+        const bbox = new THREE.Box3().setFromObject(gltfModel);
+        const size = bbox.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scaleFactor = 16.0 / (maxDim || 1);
+        gltfModel.scale.setScalar(scaleFactor);
+
+        const center = bbox.getCenter(new THREE.Vector3());
+        gltfModel.position.sub(center.multiplyScalar(scaleFactor));
+
+        gltfModel.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        container.remove(fallbackJet);
+        container.add(gltfModel);
+      },
+      undefined,
+      () => {
+        // Fallback remains active
+      }
+    );
+
+    return container;
   }
 }

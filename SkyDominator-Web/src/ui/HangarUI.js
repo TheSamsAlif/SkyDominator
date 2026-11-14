@@ -1,15 +1,18 @@
 import { AIRCRAFT_ROSTER, SKINS_PALETTE } from '../core/AircraftData.js';
+import { MISSIONS } from '../core/Missions.js';
 
 /**
  * Interactive 3D Hangar Bay & Customization UI Controller
  */
 export class HangarUI {
-  constructor(onSelectAircraft, onSelectSkin, onLaunchMission) {
+  constructor(onSelectAircraft, onSelectSkin, onSelectMission, onLaunchMission) {
     this.onSelectAircraft = onSelectAircraft;
     this.onSelectSkin = onSelectSkin;
+    this.onSelectMission = onSelectMission;
     this.onLaunchMission = onLaunchMission;
 
-    this.currentIndex = 0;
+    this.currentAircraftIndex = 0;
+    this.currentMissionIndex = 0;
     this.currentSkin = 'stealth';
     this.isTestThrust = false;
 
@@ -34,7 +37,7 @@ export class HangarUI {
     this.abilityName = document.getElementById('ability-name');
     this.abilityDesc = document.getElementById('ability-desc');
 
-    // Populate 12 Aircraft Cards
+    // Populate 12 Aircraft Cards in Carousel
     if (this.cardsWrapper) {
       let html = '';
       AIRCRAFT_ROSTER.forEach((ac, idx) => {
@@ -48,7 +51,6 @@ export class HangarUI {
       });
       this.cardsWrapper.innerHTML = html;
 
-      // Card click events
       this.cardsWrapper.querySelectorAll('.aircraft-card').forEach(card => {
         card.addEventListener('click', () => {
           const idx = parseInt(card.dataset.index);
@@ -60,8 +62,8 @@ export class HangarUI {
     // Prev / Next Arrows
     const btnPrev = document.getElementById('btn-prev-aircraft');
     const btnNext = document.getElementById('btn-next-aircraft');
-    if (btnPrev) btnPrev.addEventListener('click', () => this.selectAircraftIndex(this.currentIndex - 1));
-    if (btnNext) btnNext.addEventListener('click', () => this.selectAircraftIndex(this.currentIndex + 1));
+    if (btnPrev) btnPrev.addEventListener('click', () => this.selectAircraftIndex(this.currentAircraftIndex - 1));
+    if (btnNext) btnNext.addEventListener('click', () => this.selectAircraftIndex(this.currentAircraftIndex + 1));
 
     // Skin Buttons
     document.querySelectorAll('.skin-btn').forEach(btn => {
@@ -73,33 +75,53 @@ export class HangarUI {
       });
     });
 
+    // Populate Mission Select Dropdown
+    const missionSelect = document.getElementById('hangar-mission-select');
+    if (missionSelect) {
+      missionSelect.innerHTML = MISSIONS.map((m, idx) => `
+        <option value="${idx}">OPERATION: ${m.name.toUpperCase()} [${m.city.toUpperCase()}]</option>
+      `).join('');
+
+      missionSelect.addEventListener('change', (e) => {
+        this.currentMissionIndex = parseInt(e.target.value);
+        this.updateMissionDetails();
+        if (this.onSelectMission) {
+          this.onSelectMission(MISSIONS[this.currentMissionIndex]);
+        }
+      });
+    }
+
     // Test Thrust Button
     const btnTestThrust = document.getElementById('btn-toggle-engine');
     if (btnTestThrust) {
       btnTestThrust.addEventListener('click', () => {
         this.isTestThrust = !this.isTestThrust;
-        btnTestThrust.style.background = this.isTestThrust ? 'var(--orange-accent)' : '';
+        btnTestThrust.classList.toggle('active', this.isTestThrust);
       });
     }
 
-    // Launch Button
+    // Launch Mission Button
     const btnLaunch = document.getElementById('btn-launch-mission');
     if (btnLaunch) {
       btnLaunch.addEventListener('click', () => {
-        this.onLaunchMission(AIRCRAFT_ROSTER[this.currentIndex], SKINS_PALETTE[this.currentSkin]);
+        this.onLaunchMission(
+          AIRCRAFT_ROSTER[this.currentAircraftIndex],
+          SKINS_PALETTE[this.currentSkin],
+          MISSIONS[this.currentMissionIndex]
+        );
       });
     }
 
     this.updatePanelData();
+    this.updateMissionDetails();
   }
 
   selectAircraftIndex(idx) {
     if (idx < 0) idx = AIRCRAFT_ROSTER.length - 1;
     if (idx >= AIRCRAFT_ROSTER.length) idx = 0;
 
-    this.currentIndex = idx;
+    this.currentAircraftIndex = idx;
 
-    // Highlight card
     if (this.cardsWrapper) {
       const cards = this.cardsWrapper.querySelectorAll('.aircraft-card');
       cards.forEach((c, i) => {
@@ -109,11 +131,11 @@ export class HangarUI {
     }
 
     this.updatePanelData();
-    this.onSelectAircraft(AIRCRAFT_ROSTER[this.currentIndex], SKINS_PALETTE[this.currentSkin]);
+    this.onSelectAircraft(AIRCRAFT_ROSTER[this.currentAircraftIndex], SKINS_PALETTE[this.currentSkin]);
   }
 
   updatePanelData() {
-    const ac = AIRCRAFT_ROSTER[this.currentIndex];
+    const ac = AIRCRAFT_ROSTER[this.currentAircraftIndex];
     if (!ac) return;
 
     if (this.nameElem) this.nameElem.textContent = ac.name.toUpperCase();
@@ -135,5 +157,17 @@ export class HangarUI {
     if (this.abilityName) this.abilityName.textContent = ac.abilityName;
     if (this.abilityDesc) this.abilityDesc.textContent = ac.abilityDesc;
   }
-}
 
+  updateMissionDetails() {
+    const m = MISSIONS[this.currentMissionIndex];
+    if (!m) return;
+
+    const descElem = document.getElementById('hangar-mission-desc');
+    const diffElem = document.getElementById('hangar-mission-diff');
+    const rewardsElem = document.getElementById('hangar-mission-rewards');
+
+    if (descElem) descElem.textContent = m.description;
+    if (diffElem) diffElem.textContent = `DIFFICULTY: ${m.difficulty.toUpperCase()}`;
+    if (rewardsElem) rewardsElem.textContent = `REWARD: +${m.rewardCredits.toLocaleString()} CR | +${m.rewardXP.toLocaleString()} XP`;
+  }
+}

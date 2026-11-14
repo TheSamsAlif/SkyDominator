@@ -7,29 +7,30 @@
   <link rel="stylesheet" href="/src/styles/main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <!-- 3D Canvas -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- G-Force Blackout & Redout Vignette Overlay -->
-  <div id="hud-gforce-vignette" class="hud-vignette-overlay"></div>
+  <!-- G-Force Screen FX -->
+  <div id="fx-blackout"></div>
+  <div id="fx-redout"></div>
 
-  <!-- Sound Initialization Overlay -->
+  <!-- Audio Prompt / Avionics Initialization Overlay -->
   <div id="audio-prompt-overlay" class="overlay-screen">
     <div class="audio-prompt-modal">
       <div class="hud-glitch-title">SKY DOMINATOR</div>
       <div class="hud-subtitle">APEX STRIKE // AIR COMBAT INITIATIVE</div>
-      <p class="prompt-text">TACTICAL AUDIO & FLIGHT SYSTEMS READY. CLICK TO ENGAGE AVIONICS.</p>
-      <button id="btn-init-audio" class="tactical-btn primary-glow">ENGAGE SYSTEMS</button>
-      <div class="hardware-spec">WEBGL2 // 60 FPS ADAPTIVE // CROSS-PLATFORM</div>
+      <p class="prompt-text">TACTICAL AVIONICS, WEAPON PAYLOAD & FLIGHT SYSTEMS ARE READY. CLICK TO INITIALIZE AIRSPACE.</p>
+      <button id="btn-init-audio" class="tactical-btn primary-glow">ENGAGE AVIONICS</button>
+      <div class="hardware-spec">WEBGL2 // ADAPTIVE 60 FPS // THREE.JS ENGINE</div>
     </div>
   </div>
 
-  <!-- Hangar UI Overlay -->
+  <!-- 3D Hangar Bay & Customization UI -->
   <div id="hangar-overlay" class="hangar-screen hidden">
-    <!-- Top Bar -->
+    <!-- Header Bar -->
     <header class="hangar-header">
       <div class="brand-badge">
         <span class="brand-icon">⚡</span>
@@ -40,18 +41,18 @@
       </div>
       <div class="pilot-profile">
         <div class="profile-stat"><span class="stat-lbl">CALLSIGN:</span> <span class="stat-val">VIPER-1</span></div>
-        <div class="profile-stat"><span class="stat-lbl">CREDITS:</span> <span class="stat-val highlight" id="hangar-credits">5,000 CR</span></div>
-        <div class="profile-stat"><span class="stat-lbl">RANK:</span> <span class="stat-val">CAPTAIN [LVL 1]</span></div>
+        <div class="profile-stat"><span class="stat-lbl">CREDITS:</span> <span class="stat-val highlight" id="hangar-credits">12,500 CR</span></div>
+        <div class="profile-stat"><span class="stat-lbl">STATUS:</span> <span class="stat-val highlight-cyan">SORTIE READY</span></div>
       </div>
     </header>
 
-    <!-- Center Inspection Area -->
+    <!-- Inspection Tools -->
     <div class="hangar-inspection-tools">
       <button id="btn-camera-reset" class="mini-tool-btn" title="Reset View">⟲ RESET VIEW</button>
-      <button id="btn-toggle-engine" class="mini-tool-btn" title="Toggle Afterburners">🔥 TEST THRUST</button>
+      <button id="btn-toggle-engine" class="mini-tool-btn" title="Toggle Afterburners">🔥 TEST AFTERBURNER</button>
     </div>
 
-    <!-- Left Stats & Customization Panel -->
+    <!-- Left Panel: Telemetry & Customization -->
     <aside class="hangar-panel left-panel">
       <div class="panel-box">
         <div class="panel-header">
@@ -64,12 +65,12 @@
         <!-- Stat Bars -->
         <div class="stats-group">
           <div class="stat-bar-row">
-            <span class="stat-name">TOP SPEED (MACH)</span>
+            <span class="stat-name">TOP SPEED</span>
             <span id="val-speed" class="stat-num">MACH 2.8</span>
             <div class="bar-track"><div id="bar-speed" class="bar-fill" style="width: 85%;"></div></div>
           </div>
           <div class="stat-bar-row">
-            <span class="stat-name">AGILITY / TURN RATE</span>
+            <span class="stat-name">AGILITY / TURN</span>
             <span id="val-agility" class="stat-num">94%</span>
             <div class="bar-track"><div id="bar-agility" class="bar-fill" style="width: 94%;"></div></div>
           </div>
@@ -99,116 +100,96 @@
             <button class="skin-btn" data-skin="arctic">ARCTIC</button>
             <button class="skin-btn" data-skin="desert">DESERT</button>
             <button class="skin-btn" data-skin="cyber">CYBER</button>
-            <button class="skin-btn" data-skin="gold">APEX GOLD</button>
+            <button class="skin-btn" data-skin="gold">GOLD</button>
+          </div>
+        </div>
+
+        <!-- Mission Deployment Selector -->
+        <div class="mission-selector-box">
+          <span class="selector-lbl">TARGET THEATER / MISSION:</span>
+          <select id="hangar-mission-select" class="mission-select-dropdown"></select>
+          <div id="hangar-mission-desc" class="mission-desc-preview">Hostile fighters and fortified coastal SAM sites threat Burj Khalifa.</div>
+          <div class="mission-sub-info">
+            <span id="hangar-mission-diff" class="diff-tag">DIFFICULTY: NORMAL</span>
+            <span id="hangar-mission-rewards" class="reward-tag">REWARD: +3,500 CR</span>
           </div>
         </div>
       </div>
     </aside>
 
-    <!-- Bottom Aircraft Carousel & Launch Area -->
+    <!-- Bottom Carousel: 12 Aircraft Selection & Launch -->
     <footer class="hangar-footer">
       <div class="carousel-container">
-        <button id="btn-prev-aircraft" class="carousel-arrow">❮</button>
-        <div id="aircraft-cards-wrapper" class="aircraft-cards"></div>
-        <button id="btn-next-aircraft" class="carousel-arrow">❯</button>
+        <button id="btn-prev-aircraft" class="carousel-arrow">◀</button>
+        <div id="aircraft-cards-wrapper" class="cards-scroll-track"></div>
+        <button id="btn-next-aircraft" class="carousel-arrow">▶</button>
       </div>
-
-      <div class="launch-actions">
-        <button id="btn-launch-mission" class="launch-btn pulse-glow">
-          <span class="launch-sub">SCRAMBLE // COMBAT ENGAGEMENT</span>
-          <span class="launch-main">LAUNCH MISSION 01</span>
-        </button>
-      </div>
+      <button id="btn-launch-mission" class="launch-btn primary-glow">
+        <span>LAUNCH MISSION</span>
+        <small class="launch-hint">[ENTER AIRSPACE]</small>
+      </button>
     </footer>
   </div>
 
-  <!-- Combat Flight HUD Overlay -->
-  <div id="combat-hud" class="combat-screen hidden">
-    <!-- 3D Projected Ground Target Markers Container -->
-    <div id="hud-ground-markers" class="hud-ground-markers-layer"></div>
-
-    <!-- Top Tactical Status Bar -->
+  <!-- Combat HUD Overlay -->
+  <div id="combat-hud" class="hud-screen hidden">
+    <!-- Top HUD Bar -->
     <div class="hud-top-bar">
-      <div class="mission-objective-box">
-        <span class="obj-tag">PRIMARY OBJECTIVE:</span>
-        <span id="hud-objective-text" class="obj-text">DEFEND AIRSPACE // ATTACK DESIGNATED TARGETS</span>
+      <div class="hud-mission-tag">
+        <span class="tag-status">TACTICAL ENGAGEMENT</span>
+        <span id="hud-mission-name">OPERATION: MIRAGE SHIELD [DUBAI]</span>
       </div>
-      <div class="mission-timer-box">
-        <span class="obj-tag">MISSION TIME:</span>
-        <span id="hud-mission-timer" class="timer-text">00:00</span>
-      </div>
-      <div class="mission-score-box">
-        <span class="obj-tag">COMBAT SCORE:</span>
-        <span id="hud-score" class="score-text">00000</span>
-      </div>
+      <div id="hud-compass-tape" class="compass-tape">HDG 000°</div>
+      <div id="hud-objective-text" class="hud-objectives">FIGHTERS: 0/6 | SAM/RADAR: 0/4</div>
     </div>
 
-    <!-- Center Pitch Ladder / Artificial Horizon & Reticles -->
-    <div class="hud-center-flight">
+    <!-- Center Pitch Ladder & Artificial Horizon -->
+    <div class="hud-pitch-container">
       <div id="hud-pitch-ladder" class="pitch-ladder">
-        <div class="ladder-bar bar-pos-20">+20</div>
-        <div class="ladder-bar bar-pos-10">+10</div>
-        <div class="ladder-horizon-line">—— 00 ——</div>
-        <div class="ladder-bar bar-neg-10">-10</div>
-        <div class="ladder-bar bar-neg-20">-20</div>
+        <div class="horizon-line"></div>
+        <div class="pitch-bar bar-pos10"><span>+10</span></div>
+        <div class="pitch-bar bar-pos20"><span>+20</span></div>
+        <div class="pitch-bar bar-neg10"><span>-10</span></div>
+        <div class="pitch-bar bar-neg20"><span>-20</span></div>
       </div>
-
-      <!-- Aircraft Center Bore Reticle -->
-      <div class="center-bore-sight">
-        <div class="boresight-cross"></div>
-        <div class="flight-path-marker" id="hud-fpm"></div>
-      </div>
-
-      <!-- Radar Lock Reticle -->
-      <div id="hud-lock-reticle" class="target-lock-box hidden">
-        <div class="lock-diamond"></div>
-        <div class="lock-details">
-          <span id="lock-target-name">TGT: SU-57 ADVANCED</span>
-          <span id="lock-range">RNG: 1.2 KM</span>
-          <span id="lock-status" class="lock-state-seeking">SEEKING</span>
-        </div>
-      </div>
-
-      <!-- Stall Warning Alert -->
-      <div id="hud-stall-alert" class="hud-warning-box hidden">
-        <span class="warning-flasher">⚠ WARNING: STALL ⚠</span>
-        <span class="warning-sub">ANGLE OF ATTACK EXCEEDED // PUSH NOSE DOWN</span>
-      </div>
-
-      <!-- Missile Warning Alert -->
-      <div id="hud-missile-alert" class="hud-warning-box missile-alert hidden">
-        <span class="warning-flasher">🚨 MISSILE ALERT 🚨</span>
-        <span class="warning-sub">DEPLOY COUNTERMEASURE FLARES [KEY: C]</span>
-      </div>
+      <div class="flight-reticle"></div>
     </div>
 
-    <!-- Left Flight Ladder (Speed & Throttle) -->
+    <!-- Left Flight Ladder (Airspeed & Throttle) -->
     <div class="hud-ladder-left">
-      <div class="ladder-header">AIRSPEED</div>
-      <div class="digital-readout"><span id="hud-speed-val">450</span> <span class="readout-unit">KTS</span></div>
-      <div class="digital-subreadout">MACH <span id="hud-mach-val">0.68</span></div>
-      <div class="throttle-container">
-        <span class="throttle-lbl">THRUST</span>
-        <div class="throttle-track">
-          <div id="hud-throttle-bar" class="throttle-fill" style="height: 60%;"></div>
-        </div>
-        <span id="hud-throttle-val" class="throttle-percent">60%</span>
-      </div>
-      <div id="hud-afterburner-tag" class="afterburner-tag">MIL POWER</div>
+      <div class="ladder-title">AIRSPEED</div>
+      <div class="ladder-box"><span id="hud-speed-val">680</span> <small>KM/H</small></div>
+      <div id="hud-mach-val" class="sub-val">MACH 0.58</div>
+      <div class="hud-stat-pill">THR: <span id="hud-throttle-val">65%</span></div>
+      <div class="hud-stat-pill">G: <span id="hud-gforce-val">1.0G</span></div>
     </div>
 
-    <!-- Right Flight Ladder (Altitude & G-Force) -->
+    <!-- Right Flight Ladder (Altitude) -->
     <div class="hud-ladder-right">
-      <div class="ladder-header">ALTITUDE</div>
-      <div class="digital-readout"><span id="hud-alt-val">3,200</span> <span class="readout-unit">M</span></div>
-      <div class="digital-subreadout">RADAR ALT: <span id="hud-radalt-val">3,200</span>M</div>
-      <div class="g-force-meter">
-        <span class="throttle-lbl">G-LOAD</span>
-        <div class="g-readout"><span id="hud-gforce-val">+1.0</span> G</div>
+      <div class="ladder-title">ALTITUDE</div>
+      <div class="ladder-box"><span id="hud-alt-val">450</span> <small>M</small></div>
+      <div class="sub-val">RADAR ALT</div>
+      <div class="hud-stat-pill alert-ok">SAFE ZONE: ACTIVE</div>
+    </div>
+
+    <!-- 3D Target Lock Reticle -->
+    <div id="hud-target-reticle" class="target-reticle">
+      <div class="reticle-box">
+        <div class="reticle-corner top-left"></div>
+        <div class="reticle-corner top-right"></div>
+        <div class="reticle-corner bottom-left"></div>
+        <div class="reticle-corner bottom-right"></div>
+      </div>
+      <div class="reticle-info">
+        <span id="hud-target-lock-tag" class="lock-status acquiring">TRACK 0%</span>
+        <span id="hud-target-dist" class="target-distance">0.0 KM</span>
       </div>
     </div>
 
-    <!-- Bottom Left: Aircraft Integrity & Energy -->
+    <!-- Ground Target In-World Projected Markers -->
+    <div id="hud-ground-markers"></div>
+
+    <!-- Bottom Left: Aircraft Integrity & Energy Gauges -->
     <div class="hud-bottom-left">
       <div class="status-gauge-row">
         <span class="gauge-lbl">HULL INTEGRITY</span>
@@ -218,7 +199,7 @@
       <div class="status-gauge-row">
         <span class="gauge-lbl">AEGIS SHIELD</span>
         <div class="gauge-track"><div id="hud-shield-bar" class="gauge-fill shield-color" style="width: 100%;"></div></div>
-        <span id="hud-shield-val" class="gauge-val">300</span>
+        <span id="hud-shield-val" class="gauge-val">100</span>
       </div>
       <div class="status-gauge-row">
         <span class="gauge-lbl">BOOST ENERGY</span>
@@ -230,7 +211,7 @@
     <!-- Bottom Center: Weapon Payload Matrix -->
     <div class="hud-bottom-center">
       <div class="weapon-slot active">
-        <span class="weapon-key">[LMB/SPACE]</span>
+        <span class="weapon-key">[SPACE]</span>
         <span class="weapon-name">20MM VULCAN</span>
         <span class="weapon-ammo">∞ AMMO</span>
       </div>
@@ -250,22 +231,21 @@
         <span id="hud-flare-count" class="weapon-ammo">12 / 12</span>
       </div>
       <div class="weapon-slot special-slot">
-        <span class="weapon-key">[F]</span>
-        <span id="hud-special-name" class="weapon-name">ACTIVE CLOAK</span>
-        <span id="hud-special-status" class="weapon-ammo highlight-cyan">READY</span>
+        <span class="weapon-key">[V]</span>
+        <span class="weapon-name">CAMERA VIEW</span>
+        <span id="hud-camera-name" class="weapon-ammo highlight-cyan">CHASE (3RD)</span>
       </div>
     </div>
 
-    <!-- Bottom Right: Radar Compass Minimap -->
+    <!-- Bottom Right: Radar Minimap -->
     <div class="hud-bottom-right">
       <div class="radar-display">
         <div class="radar-sweep"></div>
         <div class="radar-rings"></div>
         <div class="radar-center-blip"></div>
         <div id="radar-blips-container"></div>
-        <span class="radar-range-tag">RDR 5KM</span>
+        <span class="radar-range-tag">RDR 6KM</span>
       </div>
-      <div class="camera-mode-tag">VIEW: <span id="hud-camera-name">CHASE (3RD)</span> [V]</div>
     </div>
 
     <!-- Mobile Virtual Controls -->
@@ -274,35 +254,35 @@
         <div class="touch-stick-base">
           <div id="touch-stick-thumb" class="touch-stick-thumb"></div>
         </div>
-        <span class="touch-hint">PITCH & ROLL</span>
+        <span class="touch-hint">FLIGHT STICK</span>
       </div>
 
       <div class="touch-throttle-zone">
-        <button id="touch-btn-boost" class="touch-round-btn boost-btn">AFTERBURNER</button>
-        <button id="touch-btn-brake" class="touch-round-btn brake-btn">AIRBRAKE</button>
+        <button id="touch-btn-boost" class="touch-round-btn boost-btn">BOOST</button>
+        <button id="touch-btn-brake" class="touch-round-btn brake-btn">BRAKE</button>
       </div>
 
       <div class="touch-actions-zone">
-        <button id="touch-btn-fire-cannon" class="touch-action-btn fire-cannon-btn">GUN [FIRE]</button>
-        <button id="touch-btn-fire-missile" class="touch-action-btn fire-missile-btn">MISSILE</button>
-        <button id="touch-btn-bomb" class="touch-action-btn bomb-btn">BOMB [B]</button>
-        <button id="touch-btn-flare" class="touch-action-btn flare-btn">FLARE</button>
-        <button id="touch-btn-cam" class="touch-action-btn cam-btn">CAM [V]</button>
+        <button id="touch-btn-fire-cannon" class="touch-action-btn fire-cannon-btn">GUN</button>
+        <button id="touch-btn-fire-missile" class="touch-action-btn fire-missile-btn">MSL</button>
+        <button id="touch-btn-bomb" class="touch-action-btn bomb-btn">BOMB</button>
+        <button id="touch-btn-flare" class="touch-action-btn flare-btn">FLR</button>
+        <button id="touch-btn-cam" class="touch-action-btn cam-btn">CAM</button>
       </div>
     </div>
   </div>
 
-  <!-- Mission Debriefing Screen -->
+  <!-- Debriefing Screen -->
   <div id="debrief-overlay" class="debrief-screen hidden">
     <div class="debrief-modal">
       <div id="debrief-outcome-badge" class="outcome-badge victory">MISSION SUCCESS</div>
       <h2 id="debrief-mission-title" class="debrief-title">OPERATION: APEX STRIKE</h2>
       <div class="debrief-stats-grid">
-        <div class="debrief-stat"><span class="d-lbl">HOSTILES NEUTRALIZED</span><span id="d-kills" class="d-val">5 / 5</span></div>
+        <div class="debrief-stat"><span class="d-lbl">AIR & GROUND TARGETS</span><span id="d-kills" class="d-val">6 / 6</span></div>
         <div class="debrief-stat"><span class="d-lbl">MISSION TIME</span><span id="d-time" class="d-val">02:34</span></div>
         <div class="debrief-stat"><span class="d-lbl">COMBAT SCORE</span><span id="d-score" class="d-val">12,500</span></div>
-        <div class="debrief-stat"><span class="d-lbl">XP AWARDED</span><span id="d-xp" class="d-val">+1,000 XP</span></div>
-        <div class="debrief-stat"><span class="d-lbl">CREDITS BOUNTY</span><span id="d-credits" class="d-val">+2,500 CR</span></div>
+        <div class="debrief-stat"><span class="d-lbl">XP AWARDED</span><span id="d-xp" class="d-val">+1,500 XP</span></div>
+        <div class="debrief-stat"><span class="d-lbl">CREDITS BOUNTY</span><span id="d-credits" class="d-val">+4,000 CR</span></div>
       </div>
       <div class="debrief-buttons">
         <button id="btn-return-hangar" class="tactical-btn primary-glow">RETURN TO HANGAR</button>

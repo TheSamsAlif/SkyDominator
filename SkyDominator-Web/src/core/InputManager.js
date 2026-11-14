@@ -1,5 +1,5 @@
 /**
- * Cross-Platform Unified Input Manager (Keyboard, Mouse, Gamepad, Touch)
+ * Cross-Platform Unified Input Manager (Keyboard, Mouse, Touch, Gamepad)
  */
 export class InputManager {
   constructor() {
@@ -10,6 +10,8 @@ export class InputManager {
     this.throttleDown = false;
     this.boost = false;
     this.airbrake = false;
+
+    // Weapons & Actions
     this.fireCannon = false;
     this.fireMissile = false;
     this.fireBomb = false;
@@ -18,15 +20,13 @@ export class InputManager {
 
     this.keys = {};
     this.mouse = { x: 0, y: 0, down: false };
-    this.touchStick = { active: false, startX: 0, startY: 0, deltaX: 0, deltaY: 0 };
-
+    this.touchStick = { active: false, deltaX: 0, deltaY: 0 };
     this.isTouchDevice = false;
 
     this.setupListeners();
   }
 
   setupListeners() {
-    // 1. Keyboard
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
     });
@@ -35,7 +35,6 @@ export class InputManager {
       this.keys[e.code] = false;
     });
 
-    // 2. Mouse flight control
     window.addEventListener('mousemove', (e) => {
       const halfW = window.innerWidth / 2;
       const halfH = window.innerHeight / 2;
@@ -51,7 +50,7 @@ export class InputManager {
       if (e.button === 0) this.mouse.down = false;
     });
 
-    // 3. Touch Screen Detection & Virtual Joystick
+    // Touch Support
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
       this.isTouchDevice = true;
       const touchControlsElem = document.getElementById('mobile-touch-controls');
@@ -83,7 +82,6 @@ export class InputManager {
 
         this.touchStick.deltaX = dx;
         this.touchStick.deltaY = dy;
-
         thumb.style.transform = `translate(${dx * 35}px, ${dy * 35}px)`;
       };
 
@@ -109,7 +107,6 @@ export class InputManager {
       stickZone.addEventListener('touchcancel', resetThumb);
     }
 
-    // Touch Buttons
     const bindTouchBtn = (id, onStart, onEnd) => {
       const btn = document.getElementById(id);
       if (btn) {
@@ -128,60 +125,67 @@ export class InputManager {
   }
 
   update() {
-    // Check Gamepad
+    // Gamepad support
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = gamepads[0];
-
     if (gp) {
-      this.pitch = -gp.axes[1];
+      this.pitch = gp.axes[1];
       this.roll = -gp.axes[0];
-      this.throttleUp = gp.buttons[7] && gp.buttons[7].pressed;
-      this.airbrake = gp.buttons[6] && gp.buttons[6].pressed;
-      this.yaw = (gp.buttons[5]?.pressed ? 1 : 0) - (gp.buttons[4]?.pressed ? 1 : 0);
-      this.fireCannon = gp.buttons[0] && gp.buttons[0].pressed;
-      this.fireMissile = gp.buttons[1] && gp.buttons[1].pressed;
-      this.fireBomb = gp.buttons[2] && gp.buttons[2].pressed;
-      this.boost = gp.buttons[10] && gp.buttons[10].pressed;
+      this.throttleUp = !!(gp.buttons[7] && gp.buttons[7].pressed);
+      this.airbrake = !!(gp.buttons[6] && gp.buttons[6].pressed);
+      this.yaw = (gp.buttons[5]?.pressed ? -1 : 0) + (gp.buttons[4]?.pressed ? 1 : 0);
+      this.fireCannon = !!(gp.buttons[0] && gp.buttons[0].pressed);
+      this.fireMissile = !!(gp.buttons[1] && gp.buttons[1].pressed);
+      this.fireBomb = !!(gp.buttons[2] && gp.buttons[2].pressed);
+      this.boost = !!(gp.buttons[10] && gp.buttons[10].pressed);
       return;
     }
 
     // Touch stick override
     if (this.touchStick.active) {
-      this.pitch = -this.touchStick.deltaY;
+      this.pitch = this.touchStick.deltaY;
       this.roll = -this.touchStick.deltaX;
       return;
     }
 
-    // Keyboard & Mouse inputs
+    // Keyboard controls:
+    // W / Up = Dive (Pitch Down = +1)
+    // S / Down = Climb (Pitch Up = -1)
     let kPitch = 0;
     if (this.keys['KeyW'] || this.keys['ArrowUp']) kPitch += 1.0;
     if (this.keys['KeyS'] || this.keys['ArrowDown']) kPitch -= 1.0;
 
+    // A / Left = Bank Left (+1)
+    // D / Right = Bank Right (-1)
     let kRoll = 0;
     if (this.keys['KeyA'] || this.keys['ArrowLeft']) kRoll += 1.0;
     if (this.keys['KeyD'] || this.keys['ArrowRight']) kRoll -= 1.0;
 
-    const deadzone = 0.08;
-    let mPitch = Math.abs(this.mouse.y) > deadzone ? -this.mouse.y * 1.2 : 0;
-    let mRoll = Math.abs(this.mouse.x) > deadzone ? -this.mouse.x * 1.5 : 0;
+    // Subtle mouse assist if keys are not pressed
+    const deadzone = 0.12;
+    let mPitch = Math.abs(this.mouse.y) > deadzone ? this.mouse.y * 0.9 : 0;
+    let mRoll = Math.abs(this.mouse.x) > deadzone ? -this.mouse.x * 1.1 : 0;
 
     this.pitch = kPitch !== 0 ? kPitch : mPitch;
     this.roll = kRoll !== 0 ? kRoll : mRoll;
 
+    // Yaw: Q = Yaw Left (+1), E = Yaw Right (-1)
     let kYaw = 0;
     if (this.keys['KeyQ']) kYaw += 1.0;
     if (this.keys['KeyE']) kYaw -= 1.0;
     this.yaw = kYaw;
 
-    this.throttleUp = this.keys['ShiftLeft'] || this.keys['KeyZ'];
-    this.throttleDown = this.keys['ControlLeft'] || this.keys['KeyX'];
-    this.boost = this.keys['ShiftLeft'] || this.keys['Space'];
-    this.airbrake = this.keys['KeyK'];
+    // Throttle & Boost
+    this.throttleUp = !!(this.keys['ShiftLeft'] || this.keys['KeyZ']);
+    this.throttleDown = !!(this.keys['ControlLeft'] || this.keys['KeyX']);
+    this.boost = !!(this.keys['ShiftLeft'] || this.keys['Space'] && !this.mouse.down);
+    this.airbrake = !!(this.keys['KeyK']);
 
-    this.fireCannon = this.keys['Space'] || this.mouse.down;
-    this.fireMissile = this.keys['KeyR'];
-    this.fireBomb = this.keys['KeyB'];
-    this.deployFlare = this.keys['KeyC'];
-    this.cycleCamera = this.keys['KeyV'];
+    // Weapons
+    this.fireCannon = !!(this.keys['Space'] || this.mouse.down);
+    this.fireMissile = !!(this.keys['KeyR'] || this.keys['KeyM']);
+    this.fireBomb = !!(this.keys['KeyB']);
+    this.deployFlare = !!(this.keys['KeyC'] || this.keys['KeyF']);
+    this.cycleCamera = !!(this.keys['KeyV']);
   }
 }
