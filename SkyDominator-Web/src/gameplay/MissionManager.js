@@ -1,5 +1,5 @@
 /**
- * Mission & Objectives Progression Manager
+ * Multi-Stage Mission & Objectives Progression Manager (Air & Ground Strikes)
  */
 export class MissionManager {
   constructor() {
@@ -8,6 +8,12 @@ export class MissionManager {
     this.score = 0;
     this.kills = 0;
     this.totalEnemies = 5;
+
+    // Ground targets tracking
+    this.groundTargetsDestroyed = 0;
+    this.requiredGroundTargets = 3;
+    this.totalGroundTargets = 0;
+
     this.isVictory = false;
     this.isDefeat = false;
 
@@ -22,11 +28,17 @@ export class MissionManager {
     this.xpAwarded = 1000;
   }
 
-  startMission() {
+  startMission(totalAirEnemies = 5, missionData = null) {
     this.isActive = true;
     this.missionTime = 0;
     this.score = 0;
     this.kills = 0;
+    this.totalEnemies = totalAirEnemies;
+
+    this.groundTargetsDestroyed = 0;
+    this.totalGroundTargets = missionData?.groundTargets?.length || 0;
+    this.requiredGroundTargets = missionData?.primaryGroundTargetCount || Math.min(3, this.totalGroundTargets);
+
     this.isVictory = false;
     this.isDefeat = false;
 
@@ -34,17 +46,21 @@ export class MissionManager {
     this.shield = this.maxShield;
   }
 
-  update(dt, aliveEnemiesCount) {
+  update(dt, aliveAirCount, aliveGroundCount = 0) {
     if (!this.isActive || this.isVictory || this.isDefeat) return;
 
     this.missionTime += dt;
-    this.kills = this.totalEnemies - aliveEnemiesCount;
+    this.kills = this.totalEnemies - aliveAirCount;
+    this.groundTargetsDestroyed = this.totalGroundTargets - aliveGroundCount;
 
-    // Victory Check: All 5 enemies destroyed
-    if (aliveEnemiesCount === 0 && !this.isVictory) {
+    // Victory Check: Both Ground Targets and Air Wing must be neutralized
+    const groundDone = (this.totalGroundTargets === 0) || (this.groundTargetsDestroyed >= this.requiredGroundTargets);
+    const airDone = (aliveAirCount === 0);
+
+    if (groundDone && airDone && !this.isVictory) {
       this.isVictory = true;
       this.isActive = false;
-      this.score += 5000; // Mission completion bonus
+      this.score += 6000; // Multi-stage victory bonus
     }
 
     // Shield passive recharge
@@ -58,10 +74,14 @@ export class MissionManager {
     this.score += pts;
   }
 
+  recordGroundTargetKill(type = 'SAM') {
+    const pts = type === 'BUNKER' ? 1500 : (type === 'RADAR' ? 1200 : 900);
+    this.score += pts;
+  }
+
   applyDamageToPlayer(damage) {
     if (this.isDefeat || !this.isActive) return;
 
-    // Shield absorption first
     if (this.shield > 0) {
       if (this.shield >= damage) {
         this.shield -= damage;
@@ -81,10 +101,19 @@ export class MissionManager {
     }
   }
 
+  getObjectiveStatusText() {
+    const groundNeeded = this.requiredGroundTargets;
+    const groundDone = this.groundTargetsDestroyed;
+
+    if (groundDone < groundNeeded && this.totalGroundTargets > 0) {
+      return `PRIMARY: DESTROY SAM / RADAR BASES (${groundDone}/${groundNeeded}) // SEC: AIR COMBAT (${this.kills}/${this.totalEnemies})`;
+    }
+    return `PRIMARY: ELIMINATE HOSTILE FIGHTER SQUADRON (${this.kills}/${this.totalEnemies}) // AIR DEFENSE NEUTRALIZED`;
+  }
+
   getFormattedTime() {
     const mins = Math.floor(this.missionTime / 60);
     const secs = Math.floor(this.missionTime % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 }
-

@@ -115,7 +115,8 @@ export class FlightPhysics {
     const dragForce = this.velocity.clone().multiplyScalar(-currentSpeed * dragCoeff);
 
     // Gravity
-    const gravityForce = new THREE.Vector3(0, -9.8 * 3.5, 0);
+    const nearGround = this.position.y < (this.groundY ?? 5) + 40; // ground effect / takeoff assist
+    const gravityForce = new THREE.Vector3(0, -9.8 * 3.5 * (nearGround && currentSpeed > 60 ? 0.45 : 1), 0);
 
     // Total Acceleration
     const totalForce = thrustForce.add(liftForce).add(dragForce).add(gravityForce);
@@ -125,8 +126,8 @@ export class FlightPhysics {
     this.position.addScaledVector(this.velocity, dt);
 
     // Ocean Collision / Minimum altitude clamp
-    if (this.position.y < 5) {
-      this.position.y = 5;
+    if (this.position.y < (this.groundY ?? 5)) {
+      this.position.y = this.groundY ?? 5;
       this.velocity.y = Math.max(0, this.velocity.y);
     }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Combat Flight HUD & Radar Minimap Manager
+ * Combat Flight HUD, Ground Target Indicators & Radar Minimap Manager
  */
 export class HUD {
   constructor(camera) {
@@ -25,6 +25,7 @@ export class HUD {
     this.boostVal = document.getElementById('hud-boost-val');
 
     this.missileCount = document.getElementById('hud-missile-count');
+    this.bombCount = document.getElementById('hud-bomb-count');
     this.flareCount = document.getElementById('hud-flare-count');
 
     this.objectiveText = document.getElementById('hud-objective-text');
@@ -40,9 +41,13 @@ export class HUD {
     this.stallAlert = document.getElementById('hud-stall-alert');
     this.cameraName = document.getElementById('hud-camera-name');
     this.radarBlips = document.getElementById('radar-blips-container');
+
+    // G-force vignette & Ground targets container
+    this.vignette = document.getElementById('hud-gforce-vignette');
+    this.groundMarkersContainer = document.getElementById('hud-ground-markers');
   }
 
-  update(physics, combat, mission, enemies) {
+  update(physics, combat, mission, enemies, groundTargets = []) {
     // 1. Airspeed & Altitude
     if (this.speedVal) this.speedVal.textContent = Math.round(physics.airspeedKts);
     if (this.machVal) this.machVal.textContent = physics.mach.toFixed(2);
@@ -81,11 +86,12 @@ export class HUD {
 
     // 4. Weapons
     if (this.missileCount) this.missileCount.textContent = `${combat.missileAmmo} / ${combat.maxMissiles}`;
+    if (this.bombCount) this.bombCount.textContent = `${combat.bombAmmo} / ${combat.maxBombs}`;
     if (this.flareCount) this.flareCount.textContent = `${combat.flareAmmo} / ${combat.maxFlares}`;
 
     // 5. Mission Objectives
     if (this.objectiveText) {
-      this.objectiveText.textContent = `DEFEND APEX ATOLL // ELIMINATE SQUADRON (${mission.kills}/${mission.totalEnemies})`;
+      this.objectiveText.textContent = mission.getObjectiveStatusText ? mission.getObjectiveStatusText() : `DEFEND AIRSPACE`;
     }
     if (this.missionTimer) this.missionTimer.textContent = mission.getFormattedTime();
     if (this.scoreText) this.scoreText.textContent = mission.score.toString().padStart(5, '0');
@@ -106,10 +112,16 @@ export class HUD {
     // 8. 3D Projected Target Lock Reticle
     this.updateTargetLock(combat);
 
-    // 9. Radar Minimap
-    this.updateRadar(physics, enemies);
+    // 9. Ground Target Markers
+    this.updateGroundTargetMarkers(groundTargets);
 
-    // 10. Camera Name
+    // 10. Radar Minimap
+    this.updateRadar(physics, enemies, groundTargets);
+
+    // 11. G-Force Blackout & Redout Vignette
+    this.updateGForceVignette(physics.gForce);
+
+    // 12. Camera Name
     if (this.cameraName) {
       this.cameraName.textContent = physics.cameraViewMode === 0 ? 'CHASE (3RD)' : 'COCKPIT (1ST)';
     }
@@ -122,7 +134,6 @@ export class HUD {
       const targetPos = combat.currentTarget.mesh.position.clone();
       const screenPos = targetPos.project(this.camera);
 
-      // Check if target is in front of camera
       if (screenPos.z < 1.0) {
         const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
         const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
@@ -151,15 +162,64 @@ export class HUD {
     this.lockReticle.classList.add('hidden');
   }
 
-  updateRadar(physics, enemies) {
+  updateGroundTargetMarkers(groundTargets) {
+    if (!this.groundMarkersContainer) return;
+
+    let html = '';
+    const camPos = this.camera.position;
+
+    for (let gt of groundTargets) {
+      if (gt.isDead || !gt.position) continue;
+
+      const screenPos = gt.position.clone().add(new THREE.Vector3(0, 15, 0)).project(this.camera);
+
+      // Only draw if target is in front of the camera and within 8km
+      const dist = gt.position.distanceTo(camPos);
+      if (screenPos.z < 1.0 && dist < 8500) {
+        const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+        const distKm = (dist / 1000).toFixed(1);
+
+        html += `
+          <div class="ground-marker-item" style="left:${x}px; top:${y}px;">
+            <div class="ground-marker-diamond"></div>
+            <div class="ground-marker-label">[${gt.type}] ${gt.name} (${distKm}KM)</div>
+          </div>
+        `;
+      }
+    }
+
+    this.groundMarkersContainer.innerHTML = html;
+  }
+
+  updateGForceVignette(gForce) {
+    if (!this.vignette) return;
+
+    if (gForce > 5.5) {
+      // High-G Blackout: Tunnel vision darkening
+      const alpha = Math.min(0.85, (gForce - 5.5) / 3.5);
+      this.vignette.className = 'hud-vignette-overlay blackout';
+      this.vignette.style.opacity = alpha.toFixed(2);
+    } else if (gForce < -1.0) {
+      // Negative-G Redout: Blood rush to eyes
+      const alpha = Math.min(0.75, (-1.0 - gForce) / 2.2);
+      this.vignette.className = 'hud-vignette-overlay redout';
+      this.vignette.style.opacity = alpha.toFixed(2);
+    } else {
+      this.vignette.style.opacity = '0';
+    }
+  }
+
+  updateRadar(physics, enemies, groundTargets = []) {
     if (!this.radarBlips || !enemies) return;
 
     let html = '';
     const playerPos = physics.position;
     const playerRotY = physics.mesh.rotation.y;
-    const radarRange = 5000; // 5km radius
+    const radarRange = 6000;
     const radarRadiusPx = 60;
 
+    // 1. Air Hostiles (Red blips)
     for (let e of enemies) {
       if (e.isDead || !e.mesh) continue;
 
@@ -168,10 +228,8 @@ export class HUD {
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       if (dist < radarRange) {
-        // Rotate relative to player heading
         const angle = Math.atan2(dx, dz) - playerRotY;
         const r = (dist / radarRange) * radarRadiusPx;
-
         const bx = 70 + Math.sin(angle) * r;
         const by = 70 - Math.cos(angle) * r;
 
@@ -179,7 +237,24 @@ export class HUD {
       }
     }
 
+    // 2. Ground Targets (Amber blips)
+    for (let gt of groundTargets) {
+      if (gt.isDead || !gt.position) continue;
+
+      const dx = gt.position.x - playerPos.x;
+      const dz = gt.position.z - playerPos.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (dist < radarRange) {
+        const angle = Math.atan2(dx, dz) - playerRotY;
+        const r = (dist / radarRange) * radarRadiusPx;
+        const bx = 70 + Math.sin(angle) * r;
+        const by = 70 - Math.cos(angle) * r;
+
+        html += `<div class="radar-blip-enemy" style="background:#ffaa00; box-shadow:0 0 6px #ffaa00; left:${bx}px; top:${by}px;"></div>`;
+      }
+    }
+
     this.radarBlips.innerHTML = html;
   }
 }
-

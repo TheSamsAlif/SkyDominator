@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createMissileModel } from '../graphics/RealisticJet.js';
 import { AircraftModelGenerator } from '../graphics/AircraftModelGenerator.js';
 
 /**
@@ -10,63 +11,33 @@ export class EnemySquadronManager {
     this.particles = particleSystem;
     this.audio = soundManager;
     this.enemies = [];
+    this.missiles = [];
+    this.threat = 0;
   }
 
-  spawnMissionSquadron() {
+  spawnMissionSquadron(mission, origin) {
     this.clear();
-
-    const enemyTypes = [
-      { name: 'DRONE-ALPHA', class: 'Scout Drone', hp: 200, speed: 180, color: 0x882222, wingspan: 11 },
-      { name: 'SU-57 HOSTILE', class: 'Interceptor', hp: 450, speed: 210, color: 0x334455, wingspan: 15 },
-      { name: 'MIG-35 BANDIT', class: 'Interceptor', hp: 450, speed: 200, color: 0x2e3b4e, wingspan: 14 },
-      { name: 'BLACK WIDOW', class: 'Strike Fighter', hp: 600, speed: 190, color: 0x221111, wingspan: 16 },
-      { name: 'VANGUARD ZERO', class: 'Ace Boss', hp: 1200, speed: 250, color: 0x990000, wingspan: 17 }
-    ];
-
-    const spawnPositions = [
-      new THREE.Vector3(800, 1200, 1500),
-      new THREE.Vector3(-1200, 1500, 1800),
-      new THREE.Vector3(400, 900, 2400),
-      new THREE.Vector3(-600, 1400, 2800),
-      new THREE.Vector3(0, 1800, 3200) // Boss
-    ];
-
-    for (let i = 0; i < enemyTypes.length; i++) {
-      const type = enemyTypes[i];
-      const pos = spawnPositions[i];
-
+    let i = 0;
+    for (const t of mission.enemies) for (let k = 0; k < t.n; k++, i++) {
       const mesh = AircraftModelGenerator.createAircraft({
-        id: `enemy_${i}`,
-        defaultColor: type.color,
-        accentColor: 0xff1744,
-        wingspan: type.wingspan,
-        wingType: (i === 4) ? 'forward_swept' : 'diamond_delta'
-      });
-
-      mesh.position.copy(pos);
-      // Face toward player's starting area
-      mesh.lookAt(0, 800, -2000);
-
+        id: `enemy_${i}`, defaultColor: t.color, accentColor: t.boss ? 0xff1744 : 0xff6a00,
+        wingspan: t.boss ? 17 : 14, wingType: t.boss ? 'forward_swept' : 'diamond_delta' });
+      mesh.scale.setScalar(t.boss ? 1.8 : 1.4);
+      const ang = (i / 7) * 2.2 - 1.1;
+      mesh.position.set(origin.x + Math.sin(ang) * 1800 + (Math.random() - 0.5) * 600,
+        700 + Math.random() * 900, origin.z + 3200 + i * 350);
+      mesh.lookAt(origin);
       this.scene.add(mesh);
-
-      this.enemies.push({
-        id: i,
-        name: type.name,
-        class: type.class,
-        mesh: mesh,
-        hp: type.hp,
-        maxHp: type.hp,
-        baseSpeed: type.speed,
-        velocity: new THREE.Vector3(0, 0, type.speed),
-        isDead: false,
-        shootCooldown: 1.0 + Math.random() * 2.0,
-        maneuverTimer: Math.random() * 3.0,
-        isBoss: (i === 4)
-      });
+      this.enemies.push({ id: i, name: t.name, class: t.cls, mesh, hp: t.hp, maxHp: t.hp, baseSpeed: t.speed,
+        velocity: new THREE.Vector3(0, 0, t.speed), isDead: false, shootCooldown: 2 + Math.random() * 3,
+        maneuverTimer: Math.random() * 3, isBoss: !!t.boss, roll: 0, jink: 0 });
     }
   }
 
   clear() {
+    for (const m of this.missiles || []) this.scene.remove(m.mesh);
+    this.missiles = [];
+    this.threat = 0;
     for (let e of this.enemies) {
       if (e.mesh) {
         this.scene.remove(e.mesh);
@@ -100,11 +71,13 @@ export class EnemySquadronManager {
         enemy.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), currentDir);
 
         // Bank into turns
-        enemy.mesh.rotation.z = Math.sin(Date.now() * 0.002 + enemy.id) * 0.6;
+        enemy.roll += ((Math.sin(Date.now() * 0.002 + enemy.id) * 0.6) - enemy.roll) * dt * 2;
+        enemy.mesh.rotateZ(enemy.roll * 0.05);
+        if (distToPlayer < 900) { enemy.jink += dt; enemy.mesh.rotateX(Math.sin(enemy.jink * 3 + enemy.id) * 0.02); } // evasive jink
 
         // Firing logic against player
         enemy.shootCooldown -= dt;
-        if (distToPlayer < 1200 && enemy.shootCooldown <= 0) {
+        if (distToPlayer < 1200 && !this.playerSafe && enemy.shootCooldown <= 0) {
           const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.mesh.quaternion);
           const aimDot = forward.dot(targetDir);
 
@@ -112,10 +85,18 @@ export class EnemySquadronManager {
             enemy.shootCooldown = enemy.isBoss ? 0.8 : 2.0;
             this.particles.spawnBullet(enemy.mesh.position, forward, enemy.velocity);
             // Check hit against player
-            if (distToPlayer < 800) {
-              onPlayerDamaged(25); // 25 damage to player
-            }
+            if (distToPlayer < 600 && Math.random() < 0.35) onPlayerDamaged(25);
           }
+        }
+      }
+
+      // Enemy homing missile launch (long range, needs a nose-on shot)
+      enemy.missileCd = (enemy.missileCd ?? 6 + Math.random() * 8) - dt;
+      if (distToPlayer > 700 && distToPlayer < 3500 && enemy.missileCd <= 0 && !this.playerSafe && this.missiles.length < 4) {
+        const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.mesh.quaternion);
+        if (fwd.dot(toPlayer.clone().normalize()) > 0.9) {
+          enemy.missileCd = enemy.isBoss ? 7 : 12 + Math.random() * 6;
+          this.launchMissile(enemy.mesh.position, fwd);
         }
       }
 
@@ -123,12 +104,54 @@ export class EnemySquadronManager {
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.mesh.quaternion);
       enemy.velocity.copy(forward.multiplyScalar(enemy.baseSpeed));
       enemy.mesh.position.addScaledVector(enemy.velocity, dt);
+      if (enemy.mesh.position.y < 320) { enemy.mesh.position.y = 320; enemy.mesh.rotateX(-0.03); } // never hit the city
+      AircraftModelGenerator.updateAfterburnerFX(enemy.mesh, 0.8, true);
 
       // Low health smoke
       if (enemy.hp < enemy.maxHp * 0.4 && Math.random() > 0.5) {
         this.particles.spawnMissileSmoke(enemy.mesh.position);
       }
     }
+    this.updateMissiles(dt, playerPos, onPlayerDamaged);
+  }
+
+  launchMissile(pos, dir) {
+    const mesh = createMissileModel(); mesh.scale.setScalar(2.2);
+    mesh.position.copy(pos).addScaledVector(dir, 12);
+    this.scene.add(mesh);
+    this.missiles.push({ mesh, dir: dir.clone(), speed: 330, life: 11, decoy: null, rolled: false });
+    this.audio.playWarningChime('missile');
+  }
+
+  updateMissiles(dt, playerPos, onPlayerDamaged) {
+    let nearest = Infinity;
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      const m = this.missiles[i];
+      m.life -= dt;
+      if (this.playerSafe) m.life = Math.min(m.life, 0.5); // base AA shoots missiles down
+      // Flares can seduce the seeker: 60% chance once a flare is within 350m
+      if (!m.rolled) {
+        const f = this.particles.flares.find(f => f.mesh.position.distanceTo(m.mesh.position) < 350);
+        if (f) { m.rolled = true; if (Math.random() < 0.6) m.decoy = f; }
+      }
+      const tgt = m.decoy ? m.decoy.mesh.position : playerPos;
+      const to = tgt.clone().sub(m.mesh.position);
+      const d = to.length();
+      if (!m.decoy || m.decoy.life > 0) m.dir.lerp(to.normalize(), Math.min(1, 1.5 * dt)).normalize();
+      m.mesh.position.addScaledVector(m.dir, m.speed * dt);
+      m.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), m.dir);
+      this.particles.spawnMissileSmoke(m.mesh.position);
+      if (!m.decoy) nearest = Math.min(nearest, d);
+      const hitPlayer = !m.decoy && d < 30;
+      const hitFlare = m.decoy && d < 20;
+      if (hitPlayer || hitFlare || m.life <= 0 || m.mesh.position.y < 20) {
+        if (hitPlayer) onPlayerDamaged(180);
+        if (hitPlayer || hitFlare) { this.particles.spawnExplosion(m.mesh.position, 1.2); this.audio.playExplosion(false); }
+        this.scene.remove(m.mesh);
+        this.missiles.splice(i, 1);
+      }
+    }
+    this.threat = nearest; // metres to closest missile locked on the player
   }
 
   damageEnemy(enemy, damage) {

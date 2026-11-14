@@ -12,6 +12,7 @@ export class InputManager {
     this.airbrake = false;
     this.fireCannon = false;
     this.fireMissile = false;
+    this.fireBomb = false;
     this.deployFlare = false;
     this.cycleCamera = false;
 
@@ -121,6 +122,7 @@ export class InputManager {
     bindTouchBtn('touch-btn-brake', () => { this.airbrake = true; }, () => { this.airbrake = false; });
     bindTouchBtn('touch-btn-fire-cannon', () => { this.fireCannon = true; }, () => { this.fireCannon = false; });
     bindTouchBtn('touch-btn-fire-missile', () => { this.fireMissile = true; }, () => { this.fireMissile = false; });
+    bindTouchBtn('touch-btn-bomb', () => { this.fireBomb = true; }, () => { this.fireBomb = false; });
     bindTouchBtn('touch-btn-flare', () => { this.deployFlare = true; }, () => { this.deployFlare = false; });
     bindTouchBtn('touch-btn-cam', () => { this.cycleCamera = true; }, () => { this.cycleCamera = false; });
   }
@@ -131,18 +133,15 @@ export class InputManager {
     const gp = gamepads[0];
 
     if (gp) {
-      // Left stick: Pitch & Roll
       this.pitch = -gp.axes[1];
       this.roll = -gp.axes[0];
-      // Triggers: Throttle & Brake
       this.throttleUp = gp.buttons[7] && gp.buttons[7].pressed;
       this.airbrake = gp.buttons[6] && gp.buttons[6].pressed;
-      // Bumpers: Yaw
       this.yaw = (gp.buttons[5]?.pressed ? 1 : 0) - (gp.buttons[4]?.pressed ? 1 : 0);
-      // Face buttons
       this.fireCannon = gp.buttons[0] && gp.buttons[0].pressed;
       this.fireMissile = gp.buttons[1] && gp.buttons[1].pressed;
-      this.boost = gp.buttons[10] && gp.buttons[10].pressed; // L3
+      this.fireBomb = gp.buttons[2] && gp.buttons[2].pressed;
+      this.boost = gp.buttons[10] && gp.buttons[10].pressed;
       return;
     }
 
@@ -162,7 +161,6 @@ export class InputManager {
     if (this.keys['KeyA'] || this.keys['ArrowLeft']) kRoll += 1.0;
     if (this.keys['KeyD'] || this.keys['ArrowRight']) kRoll -= 1.0;
 
-    // Mouse blend
     const deadzone = 0.08;
     let mPitch = Math.abs(this.mouse.y) > deadzone ? -this.mouse.y * 1.2 : 0;
     let mRoll = Math.abs(this.mouse.x) > deadzone ? -this.mouse.x * 1.5 : 0;
@@ -178,12 +176,12 @@ export class InputManager {
     this.throttleUp = this.keys['ShiftLeft'] || this.keys['KeyZ'];
     this.throttleDown = this.keys['ControlLeft'] || this.keys['KeyX'];
     this.boost = this.keys['ShiftLeft'] || this.keys['Space'];
-    this.airbrake = this.keys['KeyB'];
+    this.airbrake = this.keys['KeyK'];
 
     this.fireCannon = this.keys['Space'] || this.mouse.down;
     this.fireMissile = this.keys['KeyR'];
+    this.fireBomb = this.keys['KeyB'];
     this.deployFlare = this.keys['KeyC'];
     this.cycleCamera = this.keys['KeyV'];
   }
 }
-

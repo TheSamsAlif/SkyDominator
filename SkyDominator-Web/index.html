@@ -13,7 +13,10 @@
   <!-- 3D Canvas -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- Sound Initialization Overlay (Required for Web Audio auto-play policy) -->
+  <!-- G-Force Blackout & Redout Vignette Overlay -->
+  <div id="hud-gforce-vignette" class="hud-vignette-overlay"></div>
+
+  <!-- Sound Initialization Overlay -->
   <div id="audio-prompt-overlay" class="overlay-screen">
     <div class="audio-prompt-modal">
       <div class="hud-glitch-title">SKY DOMINATOR</div>
@@ -42,7 +45,7 @@
       </div>
     </header>
 
-    <!-- Center Inspection Area (3D canvas visible through transparent overlay) -->
+    <!-- Center Inspection Area -->
     <div class="hangar-inspection-tools">
       <button id="btn-camera-reset" class="mini-tool-btn" title="Reset View">⟲ RESET VIEW</button>
       <button id="btn-toggle-engine" class="mini-tool-btn" title="Toggle Afterburners">🔥 TEST THRUST</button>
@@ -106,9 +109,7 @@
     <footer class="hangar-footer">
       <div class="carousel-container">
         <button id="btn-prev-aircraft" class="carousel-arrow">❮</button>
-        <div id="aircraft-cards-wrapper" class="aircraft-cards">
-          <!-- Dynamically populated 12 aircraft cards -->
-        </div>
+        <div id="aircraft-cards-wrapper" class="aircraft-cards"></div>
         <button id="btn-next-aircraft" class="carousel-arrow">❯</button>
       </div>
 
@@ -123,11 +124,14 @@
 
   <!-- Combat Flight HUD Overlay -->
   <div id="combat-hud" class="combat-screen hidden">
+    <!-- 3D Projected Ground Target Markers Container -->
+    <div id="hud-ground-markers" class="hud-ground-markers-layer"></div>
+
     <!-- Top Tactical Status Bar -->
     <div class="hud-top-bar">
       <div class="mission-objective-box">
         <span class="obj-tag">PRIMARY OBJECTIVE:</span>
-        <span id="hud-objective-text" class="obj-text">DEFEND APEX ATOLL // ELIMINATE ENEMY SQUADRON (0/5)</span>
+        <span id="hud-objective-text" class="obj-text">DEFEND AIRSPACE // ATTACK DESIGNATED TARGETS</span>
       </div>
       <div class="mission-timer-box">
         <span class="obj-tag">MISSION TIME:</span>
@@ -236,6 +240,11 @@
         <span id="hud-missile-count" class="weapon-ammo">8 / 8</span>
       </div>
       <div class="weapon-slot">
+        <span class="weapon-key">[B]</span>
+        <span class="weapon-name">AGM BOMB</span>
+        <span id="hud-bomb-count" class="weapon-ammo">4 / 4</span>
+      </div>
+      <div class="weapon-slot">
         <span class="weapon-key">[C]</span>
         <span class="weapon-name">FLARES</span>
         <span id="hud-flare-count" class="weapon-ammo">12 / 12</span>
@@ -259,9 +268,8 @@
       <div class="camera-mode-tag">VIEW: <span id="hud-camera-name">CHASE (3RD)</span> [V]</div>
     </div>
 
-    <!-- Mobile Virtual Controls (Visible on Touch Devices) -->
+    <!-- Mobile Virtual Controls -->
     <div id="mobile-touch-controls" class="mobile-controls">
-      <!-- Left Virtual Flight Stick -->
       <div id="virtual-flight-stick" class="touch-stick-zone">
         <div class="touch-stick-base">
           <div id="touch-stick-thumb" class="touch-stick-thumb"></div>
@@ -269,23 +277,22 @@
         <span class="touch-hint">PITCH & ROLL</span>
       </div>
 
-      <!-- Center Throttle Slider -->
       <div class="touch-throttle-zone">
         <button id="touch-btn-boost" class="touch-round-btn boost-btn">AFTERBURNER</button>
         <button id="touch-btn-brake" class="touch-round-btn brake-btn">AIRBRAKE</button>
       </div>
 
-      <!-- Right Action Combat Buttons -->
       <div class="touch-actions-zone">
         <button id="touch-btn-fire-cannon" class="touch-action-btn fire-cannon-btn">GUN [FIRE]</button>
         <button id="touch-btn-fire-missile" class="touch-action-btn fire-missile-btn">MISSILE</button>
+        <button id="touch-btn-bomb" class="touch-action-btn bomb-btn">BOMB [B]</button>
         <button id="touch-btn-flare" class="touch-action-btn flare-btn">FLARE</button>
         <button id="touch-btn-cam" class="touch-action-btn cam-btn">CAM [V]</button>
       </div>
     </div>
   </div>
 
-  <!-- Mission Debriefing / Results Screen -->
+  <!-- Mission Debriefing Screen -->
   <div id="debrief-overlay" class="debrief-screen hidden">
     <div class="debrief-modal">
       <div id="debrief-outcome-badge" class="outcome-badge victory">MISSION SUCCESS</div>
@@ -307,4 +314,3 @@
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
-
